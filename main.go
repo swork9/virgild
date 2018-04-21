@@ -122,9 +122,9 @@ func main() {
 				if r := recover(); r != nil {
 					switch x := r.(type) {
 					case error:
-						log.Fatalln("(panic)", x.Error(), string(debug.Stack()))
+						log.Fatal("(panic) ", x.Error(), ":\n", string(debug.Stack()))
 					default:
-						log.Fatalln("(panic)", x, string(debug.Stack()))
+						log.Fatal("(panic) ", x, ":\n", string(debug.Stack()))
 					}
 				}
 			}()
