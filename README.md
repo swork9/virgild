@@ -29,7 +29,7 @@ go build
 Usage of ./virgild:
   -c string
         Config file to use (default "virgild.conf")
-  -d    Daemonize service and starts it as another user based on config
+  -d    Daemonize service and detach from tty
 ```
 
 In most cases, you will want to run virgild as a daemon, like:

@@ -59,12 +59,12 @@ func daemonize(args []string, username string, groupname string, detach bool) er
 		return err
 	}
 
-	/*err = process.Release()
-	if err != nil {
-		return err
-	}*/
-
-	if !detach {
+	if detach {
+		err = process.Release()
+		if err != nil {
+			return err
+		}
+	} else {
 		process.Wait()
 	}
 
