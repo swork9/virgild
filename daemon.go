@@ -8,10 +8,19 @@ import (
 )
 
 // It's not "real" fork, but just restarting the app with the same args (except -d). Unfortunately, golang do not support fork fully, so I'll use this code.
-func daemonize(args []string, username string, groupname string) error {
+func daemonize(args []string, username string, groupname string, detach bool) error {
+	currentUser, err := user.Current()
+	if err != nil {
+		return err
+	}
+
 	lookupResult, err := user.Lookup(username)
 	if err != nil {
 		return err
+	}
+
+	if currentUser.Uid == lookupResult.Uid {
+		return nil
 	}
 
 	uid, err := strconv.ParseUint(lookupResult.Uid, 10, 32)
@@ -29,7 +38,7 @@ func daemonize(args []string, username string, groupname string) error {
 		//Files: []*os.File{os.Stdin, nil, nil},
 		//Env: os.Environ(),
 		Sys: &syscall.SysProcAttr{
-			Noctty: true,
+			Noctty: detach,
 			Credential: &syscall.Credential{
 				Uid: uint32(uid),
 				Gid: uint32(gid),
@@ -49,10 +58,16 @@ func daemonize(args []string, username string, groupname string) error {
 		return err
 	}
 
-	err = process.Release()
+	/*err = process.Release()
 	if err != nil {
 		return err
+	}*/
+
+	if !detach {
+		process.Wait()
 	}
+
+	os.Exit(0)
 
 	return nil
 }

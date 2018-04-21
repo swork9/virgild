@@ -40,7 +40,7 @@ var (
 
 func init() {
 	configPtr := flag.String("c", "virgild.conf", "Config file to use")
-	forkPtr := flag.Bool("d", false, "Daemonize service and starts it as another user based on config")
+	detachPtr := flag.Bool("d", false, "Daemonize service and detach from tty")
 	flag.Parse()
 
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
@@ -72,11 +72,8 @@ func init() {
 		log.SetLevel(log.ErrorLevel)
 	}
 
-	if *forkPtr {
-		if err := daemonize(os.Args, config.Server.UID, config.Server.GID); err != nil {
-			log.Fatalln("(daemonize)", err)
-		}
-		return
+	if err := daemonize(os.Args, config.Server.UID, config.Server.GID, *detachPtr); err != nil {
+		log.Fatalln("(daemonize)", err)
 	}
 }
 
