@@ -24,7 +24,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 
 	log "github.com/sirupsen/logrus"
@@ -78,8 +77,6 @@ func init() {
 		}
 		return
 	}
-
-	log.Println(config)
 }
 
 func main() {
@@ -91,7 +88,6 @@ func main() {
 	if len(authMethods) == 0 && !config.Server.AllowAnonymous {
 		log.Fatalln("(auth) current configuration will not work, because anonymous login disabled and no other auth methods configured.")
 	}
-	fmt.Println(authMethods)
 
 	socksServers := []*socks.Server{}
 	if len(config.Server.Bind) > 0 {
