@@ -43,13 +43,6 @@ func init() {
 	forkPtr := flag.Bool("d", false, "Daemonize service and starts it as another user based on config")
 	flag.Parse()
 
-	if *forkPtr {
-		if err := daemonize(os.Args, config.Server.UID, config.Server.GID); err != nil {
-			log.Fatalln("(daemonize)", err)
-		}
-		return
-	}
-
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 
 	config = &models.Config{}
@@ -77,6 +70,13 @@ func init() {
 		log.SetLevel(log.FatalLevel)
 	} else {
 		log.SetLevel(log.ErrorLevel)
+	}
+
+	if *forkPtr {
+		if err := daemonize(os.Args, config.Server.UID, config.Server.GID); err != nil {
+			log.Fatalln("(daemonize)", err)
+		}
+		return
 	}
 
 	log.Println(config)
