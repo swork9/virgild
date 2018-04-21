@@ -25,10 +25,17 @@ go build
 
 ### Usage
 
-```Usage of ./virgild:
+```
+Usage of ./virgild:
   -c string
         Config file to use (default "virgild.conf")
   -d    Daemonize service and starts it as another user based on config
+```
+
+In most cases, you will want to run virgild as a daemon, like:
+
+```
+./virgild -d -c /etc/virgild.conf
 ```
 
 ### Authentication methods
