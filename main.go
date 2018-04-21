@@ -25,6 +25,7 @@ package main
 import (
 	"flag"
 	"os"
+	"runtime/debug"
 
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/gcfg.v1"
@@ -117,6 +118,17 @@ func main() {
 	for _, server := range socksServers {
 		go func(server *socks.Server) {
 			defer server.Close()
+			defer func() {
+				if r := recover(); r != nil {
+					switch x := r.(type) {
+					case error:
+						log.Fatalln("(panic)", x.Error(), string(debug.Stack()))
+					default:
+						log.Fatalln("(panic)", x, string(debug.Stack()))
+					}
+				}
+			}()
+
 			errc <- server.Start()
 		}(server)
 	}
