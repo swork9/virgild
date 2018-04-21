@@ -7,7 +7,7 @@ import (
 	"syscall"
 )
 
-// It's not "real" fork, but just restarting the app with the same args (except -fork). Unfortunately, golang do not support fork fully, so I'll use this code.
+// It's not "real" fork, but just restarting the app with the same args (except -d). Unfortunately, golang do not support fork fully, so I'll use this code.
 func daemonize(args []string, username string, groupname string) error {
 	lookupResult, err := user.Lookup(username)
 	if err != nil {
@@ -39,7 +39,7 @@ func daemonize(args []string, username string, groupname string) error {
 
 	runArgs := []string{}
 	for _, arg := range os.Args {
-		if arg != "-fork" {
+		if arg != "-d" {
 			runArgs = append(runArgs, arg)
 		}
 	}
