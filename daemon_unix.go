@@ -29,32 +29,36 @@ import (
 	"os/user"
 	"strconv"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 // It's not "real" fork, but just restarting the app with the same args (except -d). Unfortunately, golang do not support fork fully, so I'll use this code.
 func daemonize(args []string, username string, groupname string, detach bool) error {
-	currentUser, err := user.Current()
+	lookupUser, err := user.Lookup(username)
+	if err != nil {
+		return err
+	}
+	lookupGroup, err := user.LookupGroup(groupname)
 	if err != nil {
 		return err
 	}
 
-	lookupResult, err := user.Lookup(username)
+	uid, err := strconv.ParseUint(lookupUser.Uid, 10, 32)
 	if err != nil {
 		return err
 	}
 
-	if currentUser.Uid == lookupResult.Uid {
+	gid, err := strconv.ParseUint(lookupGroup.Gid, 10, 32)
+	if err != nil {
+		return err
+	}
+
+	currentUid := uint32(unix.Getuid())
+	currentGid := uint32(unix.Getgid())
+
+	if currentUid == uint32(uid) && currentGid == uint32(gid) {
 		return nil
-	}
-
-	uid, err := strconv.ParseUint(lookupResult.Uid, 10, 32)
-	if err != nil {
-		return err
-	}
-
-	gid, err := strconv.ParseUint(lookupResult.Gid, 10, 32)
-	if err != nil {
-		return err
 	}
 
 	attr := &os.ProcAttr{

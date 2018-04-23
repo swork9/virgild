@@ -59,7 +59,7 @@ func udpSendSocksPacket(listener net.PacketConn, from *net.UDPAddr, data []byte)
 
 		ip = data[4:8]
 	} else if data[3] == 0x02 {
-		headerLen += 1
+		headerLen++
 		if dataLen < headerLen {
 			return fmt.Errorf("socks5 udp packet header length < %d", headerLen)
 		}
