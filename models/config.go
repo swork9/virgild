@@ -23,6 +23,8 @@ SOFTWARE. */
 package models
 
 import (
+	"net"
+
 	"github.com/swork9/virgild/auth"
 )
 
@@ -43,8 +45,18 @@ type ServerConfig struct {
 	PrivateKey string
 	PublicKey  string
 
-	AllowAnonymous      bool
-	AllowTCPBind        bool
+	AllowAnonymous bool
+
+	AllowTCPBind      bool
+	TCPBindAddr       string
+	TCPBindPortsStart int
+	TCPBindPortsEnd   int
+
+	// Don't use it in your config file, please, it's for internal use.
+	TCPBindAddrIsHostname bool
+	TCPBindAddrIP         net.IP
+	TCPBindAddrHostname   string
+
 	AllowUDPAssociation bool
 
 	LogLevel string

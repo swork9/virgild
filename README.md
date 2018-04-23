@@ -3,11 +3,12 @@ Easy to use socks(4/4a/5) server.
 
 ### Current state
    - Full support for socks connection command.
+   - Experimental support for tcp bind.
    - User authorization via plain text db.
    - TLS server.
 
 ### TODO
-   - Add support for tcp bind and udp association.
+   - Add support for udp association.
    - sql/odbc user authentication.
    - Web panel for monitoring.
    - Bugs free code.

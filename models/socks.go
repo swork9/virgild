@@ -20,42 +20,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-package socks
+package models
 
 import (
 	"bufio"
-	"fmt"
-	"net"
 )
 
-type proxyAction int
-
-const (
-	proxyActionUnknown proxyAction = iota
-	proxyActionConnection
-	proxyActionTCPBind
-	proxyActionUDPAssociation
-)
-
-type clientRequest struct {
-	action   proxyAction
-	domain   string
-	addr     net.IP
-	port     uint16
-	username string
-}
-
-func handshake(s *Server, conn net.Conn, reader *bufio.Reader) (*clientRequest, error) {
-	socksVersion, err := reader.ReadByte()
-	if err != nil {
-		return nil, err
-	}
-
-	if socksVersion == 0x04 {
-		return handshakeSocks4(s, conn, reader)
-	} else if socksVersion == 0x05 {
-		return handshakeSocks5(s, conn, reader)
-	} else {
-		return nil, fmt.Errorf("client send unknown socks version")
-	}
+type SocksClient interface {
+	Handshake(reader *bufio.Reader) error
+	Auth(reader *bufio.Reader, authMethods []AuthMethod) (*User, error)
+	Request(reader *bufio.Reader) error
+	Work() error
 }

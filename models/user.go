@@ -20,44 +20,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-package socks
+package models
 
-import (
-	"bufio"
-	"net"
-
-	log "github.com/sirupsen/logrus"
-)
-
-func handle(s *Server, conn net.Conn) {
-	defer conn.Close()
-	defer log.Debugln("Connection from", conn.RemoteAddr().String(), "closed")
-	log.Debugln("New connection from", conn.RemoteAddr().String())
-
-	reader := bufio.NewReader(conn)
-	socks, err := getSocksClientVersion(s, conn, reader)
-	if err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "version error:", err)
-		return
-	}
-
-	if err = socks.Handshake(reader); err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "handshake error:", err)
-		return
-	}
-
-	if _, err = socks.Auth(reader, s.authMethods); err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "auth error:", err)
-		return
-	}
-
-	if err = socks.Request(reader); err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "request error:", err)
-		return
-	}
-
-	if err = socks.Work(); err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "error:", err)
-		return
-	}
+type User struct {
+	Name string
 }

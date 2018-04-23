@@ -24,6 +24,7 @@ package main
 
 import (
 	"flag"
+	"net"
 	"os"
 	"runtime/debug"
 
@@ -78,6 +79,27 @@ func init() {
 }
 
 func main() {
+	if config.Server.AllowTCPBind {
+		if config.Server.TCPBindPortsEnd-config.Server.TCPBindPortsStart < 0 {
+			log.Fatalln("(tcp bind) you must setup at least 1 tcp port for binding.")
+		}
+		if len(config.Server.TCPBindAddr) == 0 {
+			log.Fatalln("(tcp bind) you must setup your external ip (or hostname) for tcp binding.")
+		}
+
+		config.Server.TCPBindAddrIP = net.ParseIP(config.Server.TCPBindAddr)
+		if config.Server.TCPBindAddrIP != nil {
+			// Just fix to make sure, that tcpBindAddrIP have 4 bytes in net.IP slice.
+			t := config.Server.TCPBindAddrIP.To4()
+			if t != nil {
+				config.Server.TCPBindAddrIP = t
+			}
+		} else {
+			config.Server.TCPBindAddrIsHostname = true
+			config.Server.TCPBindAddrHostname = config.Server.TCPBindAddr
+		}
+	}
+
 	authMethods, err := config.GetAuthMethods()
 	if err != nil {
 		log.Fatalln("(auth)", err)

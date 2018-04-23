@@ -26,6 +26,8 @@ import (
 	"fmt"
 	"net"
 	"time"
+
+	"github.com/swork9/virgild/models"
 )
 
 func connectIP(ip net.IP, port uint16) (net.Conn, error) {
@@ -37,40 +39,31 @@ func connectIP(ip net.IP, port uint16) (net.Conn, error) {
 	return c, nil
 }
 
-func connect(request *clientRequest) (net.Conn, error) {
-	if len(request.domain) > 0 {
-		ips, err := net.LookupIP(request.domain)
-		if err != nil {
-			return nil, err
-		}
-
-		/*for _, ip := range ips {
-			fmt.Println("LOOKUP:", ip.String())
-		}*/
-		for _, ip := range ips {
-			c, err := connectIP(ip, request.port)
-			if err == nil {
-				return c, nil
-			}
-		}
-
-		return nil, fmt.Errorf("destination host unreachable")
-	} else if len(request.addr) > 0 {
-		return connectIP(request.addr, request.port)
-	} else {
-		return nil, fmt.Errorf("client request don't have domain or ip to connect")
+func connectHostname(host string, port uint16) (net.Conn, error) {
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return nil, err
 	}
+
+	for _, ip := range ips {
+		c, err := connectIP(ip, port)
+		if err == nil {
+			return c, nil
+		}
+	}
+
+	return nil, fmt.Errorf("destination host unreachable")
 }
 
-func proxyChannel(s *Server, from net.Conn, to net.Conn) {
+func proxyChannel(config *models.Config, from net.Conn, to net.Conn) {
 	defer from.Close()
 	defer to.Close()
 
 	var ret int
 	var err error
-	buffer := make([]byte, s.config.Server.Buffer)
+	buffer := make([]byte, config.Server.Buffer)
 
-	timeoutDuration := time.Duration(s.config.Server.Timeout) * time.Second
+	timeoutDuration := time.Duration(config.Server.Timeout) * time.Second
 
 	for {
 		from.SetReadDeadline(time.Now().Add(timeoutDuration))
@@ -85,16 +78,4 @@ func proxyChannel(s *Server, from net.Conn, to net.Conn) {
 			return
 		}
 	}
-}
-
-func proxy(s *Server, client net.Conn, request *clientRequest) error {
-	remote, err := connect(request)
-	if err != nil {
-		return err
-	}
-
-	go proxyChannel(s, client, remote)
-	proxyChannel(s, remote, client)
-
-	return nil
 }

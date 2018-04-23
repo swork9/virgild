@@ -28,268 +28,399 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"time"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/swork9/virgild/models"
 )
 
-type handshakeSocks5AuthAnswer struct {
-	version byte
-	method  byte
+type socks5Client struct {
+	server *Server
+	config *models.Config
+	conn   net.Conn
+	user   *models.User
+
+	handshake socks5Handshake
+	auth      socks5Auth
+	request   socks5Request
 }
 
-type handshakeSocks5AuthUsernamePasswordAnswer struct {
-	version byte
-	status  byte
+type socks5Handshake struct {
+	authMethodsCount byte
+	authMethods      []byte
 }
 
-type handshakeSocks5Answer struct {
-	version byte
-	status  byte
-	null    byte
+type socks5Auth struct {
+	version  byte
+	username string
+	password string
 }
 
-func socks5SendAuthAnswer(conn net.Conn, method byte) {
-	answer := &handshakeSocks5AuthAnswer{}
+type socks5Request struct {
+	version  byte
+	command  byte
+	reserved byte
+	addrType byte
+
+	ip          net.IP
+	hostname    string
+	useHostname bool
+
+	port uint16
+}
+
+func (s *socks5Handshake) Read(reader *bufio.Reader) error {
+	var err error
+	if s.authMethodsCount, s.authMethods, err = readNBytes(reader); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *socks5Handshake) Answer(authMethod byte) []byte {
+	answer := struct {
+		version    byte
+		authMethod byte
+	}{}
+
 	answer.version = 0x05
-	answer.method = method
+	answer.authMethod = authMethod
 
 	var buffer bytes.Buffer
 	binary.Write(&buffer, binary.LittleEndian, answer)
 
-	conn.Write(buffer.Bytes())
+	return buffer.Bytes()
 }
 
-func socks5SendAuthUsernamePasswordAnswer(conn net.Conn, status byte) {
-	answer := &handshakeSocks5AuthUsernamePasswordAnswer{}
+func (s *socks5Auth) Read(reader *bufio.Reader) error {
+	var err error
+	if s.version, err = reader.ReadByte(); err != nil {
+		return err
+	}
+
+	var t []byte
+	if _, t, err = readNBytes(reader); err != nil {
+		return err
+	}
+	s.username = string(t)
+
+	if _, t, err = readNBytes(reader); err != nil {
+		return err
+	}
+	s.password = string(t)
+
+	return nil
+}
+
+func (s *socks5Auth) Answer(result byte) []byte {
+	answer := struct {
+		version byte
+		result  byte
+	}{}
+
 	answer.version = 0x01
-	answer.status = status
+	answer.result = result
 
 	var buffer bytes.Buffer
 	binary.Write(&buffer, binary.LittleEndian, answer)
 
-	conn.Write(buffer.Bytes())
+	return buffer.Bytes()
 }
 
-func socks5SendAnswer(conn net.Conn, status byte, request *clientRequest) {
-	answer := &handshakeSocks5Answer{}
+func (s *socks5Request) Read(reader *bufio.Reader) error {
+	var err error
+	if s.version, err = reader.ReadByte(); err != nil {
+		return err
+	}
+	if s.command, err = reader.ReadByte(); err != nil {
+		return err
+	}
+	if s.reserved, err = reader.ReadByte(); err != nil {
+		return err
+	}
+	if s.addrType, err = reader.ReadByte(); err != nil {
+		return err
+	}
+
+	if s.addrType == 0x01 {
+		ip := make([]byte, 4)
+		if err = binary.Read(reader, binary.LittleEndian, &ip); err != nil {
+			return err
+		}
+		s.ip = ip
+	} else if s.addrType == 0x03 {
+		var t []byte
+		if _, t, err = readNBytes(reader); err != nil {
+			return err
+		}
+		s.hostname = string(t)
+		s.useHostname = true
+	} else if s.addrType == 0x04 {
+		ip := make([]byte, 16)
+		if err = binary.Read(reader, binary.LittleEndian, &ip); err != nil {
+			return err
+		}
+		s.ip = ip
+	} else {
+		return fmt.Errorf("socks5 client send unknown address type")
+	}
+
+	if err = binary.Read(reader, binary.BigEndian, &s.port); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *socks5Request) Answer(result byte) []byte {
+	answer := struct {
+		version  byte
+		result   byte
+		reserved byte
+	}{}
+
 	answer.version = 0x05
-	answer.status = status
-	answer.null = 0x00
+	answer.result = result
+	answer.reserved = 0x00
 
 	var buffer bytes.Buffer
 	binary.Write(&buffer, binary.LittleEndian, answer)
 
-	if len(request.addr) == 4 {
-		buffer.WriteByte(0x01)
-		binary.Write(&buffer, binary.LittleEndian, request.addr)
-	} else if len(request.domain) > 0 {
-		domain := []byte(request.domain)
-		domainLength := byte(len(request.domain))
+	if s.useHostname {
+		t := []byte(s.hostname)
+		tLength := byte(len(t))
 
 		buffer.WriteByte(0x03)
-		buffer.WriteByte(domainLength)
-		binary.Write(&buffer, binary.LittleEndian, domain)
-	} else if len(request.addr) == 16 {
+		buffer.WriteByte(tLength)
+		binary.Write(&buffer, binary.LittleEndian, t)
+	} else if s.ip.To4() == nil {
 		buffer.WriteByte(0x04)
-		binary.Write(&buffer, binary.LittleEndian, request.addr)
+		binary.Write(&buffer, binary.LittleEndian, s.ip.To16())
 	} else {
-		tmpAddr := make([]byte, 4)
 		buffer.WriteByte(0x01)
-		binary.Write(&buffer, binary.LittleEndian, tmpAddr)
+		binary.Write(&buffer, binary.LittleEndian, s.ip.To4())
 	}
 
-	binary.Write(&buffer, binary.BigEndian, request.port)
+	binary.Write(&buffer, binary.BigEndian, s.port)
 
-	conn.Write(buffer.Bytes())
+	return buffer.Bytes()
 }
 
-func socks5AuthUser(s *Server, conn net.Conn, reader *bufio.Reader) (string, error) {
-	version, err := reader.ReadByte()
-	if err != nil {
-		return "", err
-	}
-	if version != 0x01 {
-		return "", fmt.Errorf("socks5 client send unknown version for authentication method")
+func (s *socks5Request) AnswerBindIP(result byte, ip net.IP, port uint16) []byte {
+	answer := struct {
+		version  byte
+		result   byte
+		reserved byte
+	}{}
+
+	answer.version = 0x05
+	answer.result = result
+	answer.reserved = 0x00
+
+	var buffer bytes.Buffer
+	binary.Write(&buffer, binary.LittleEndian, answer)
+
+	if ip.To4() == nil {
+		buffer.WriteByte(0x04)
+		binary.Write(&buffer, binary.LittleEndian, ip.To16())
+	} else {
+		buffer.WriteByte(0x01)
+		binary.Write(&buffer, binary.LittleEndian, ip.To4())
 	}
 
-	usernameLength, err := reader.ReadByte()
-	if err != nil {
-		return "", err
-	}
-	if usernameLength == 0x00 {
-		return "", fmt.Errorf("socks5 client send zero length for username")
-	}
-	usernameBytes := make([]byte, usernameLength)
-	err = binary.Read(reader, binary.LittleEndian, &usernameBytes)
-	if err != nil {
-		return "", err
-	}
+	binary.Write(&buffer, binary.BigEndian, port)
 
-	passwordLength, err := reader.ReadByte()
-	if err != nil {
-		return "", err
-	}
-	if passwordLength == 0x00 {
-		return "", fmt.Errorf("socks5 client send zero length for password")
-	}
-	passwordBytes := make([]byte, passwordLength)
-	err = binary.Read(reader, binary.LittleEndian, &passwordBytes)
-	if err != nil {
-		return "", err
-	}
-
-	username := string(usernameBytes)
-	password := string(passwordBytes)
-
-	ok := false
-	for _, method := range s.authMethods {
-		ok, err = method.Check(username, password)
-		if err != nil {
-			log.Errorln("(auth)", err)
-		}
-		if ok {
-			break
-		}
-	}
-	if !ok {
-		socks5SendAuthUsernamePasswordAnswer(conn, 0x01)
-		return "", fmt.Errorf("socks5 client with username: \"%s\" and password: \"%s\" don't exists in our db", username, password)
-	}
-
-	socks5SendAuthUsernamePasswordAnswer(conn, 0x00)
-	return username, nil
+	return buffer.Bytes()
 }
 
-func handshakeSocks5AuthPart(s *Server, conn net.Conn, reader *bufio.Reader) (*clientRequest, error) {
-	authMethodsCount, err := reader.ReadByte()
-	if err != nil {
-		return nil, err
-	}
-	if authMethodsCount == 0x00 {
-		return nil, fmt.Errorf("socks5 client send zero count of authentication methods")
-	}
-	authMethods := make([]byte, authMethodsCount)
-	err = binary.Read(reader, binary.LittleEndian, &authMethods)
-	if err != nil {
-		return nil, err
+func (s *socks5Request) AnswerBindHostname(result byte, hostname string, port uint16) []byte {
+	answer := struct {
+		version  byte
+		result   byte
+		reserved byte
+	}{}
+
+	answer.version = 0x05
+	answer.result = result
+	answer.reserved = 0x00
+
+	var buffer bytes.Buffer
+	binary.Write(&buffer, binary.LittleEndian, answer)
+
+	t := []byte(hostname)
+	tLength := byte(len(t))
+
+	buffer.WriteByte(0x03)
+	buffer.WriteByte(tLength)
+	binary.Write(&buffer, binary.LittleEndian, t)
+
+	binary.Write(&buffer, binary.BigEndian, port)
+
+	return buffer.Bytes()
+}
+
+func (s *socks5Client) Handshake(reader *bufio.Reader) error {
+	var err error
+	if err = s.handshake.Read(reader); err != nil {
+		return err
 	}
 
-	request := &clientRequest{}
-	ok := false
-	for _, i := range authMethods {
+	return nil
+}
+
+func (s *socks5Client) Auth(reader *bufio.Reader, authMethods []models.AuthMethod) (*models.User, error) {
+	for _, i := range s.handshake.authMethods {
 		if i == 0x00 && s.config.Server.AllowAnonymous {
-			ok = true
-			socks5SendAuthAnswer(conn, 0x00)
+			s.conn.Write(s.handshake.Answer(0x00))
 
-			break
-		} else if i == 0x02 && len(s.authMethods) > 0 {
-			ok = true
-			socks5SendAuthAnswer(conn, 0x02)
+			return nil, nil
+		} else if i == 0x02 && len(authMethods) > 0 {
+			s.conn.Write(s.handshake.Answer(0x02))
 
-			request.username, err = socks5AuthUser(s, conn, reader)
-			if err != nil {
+			var err error
+			if err = s.auth.Read(reader); err != nil {
 				return nil, err
 			}
 
-			break
+			ok := false
+			for _, method := range authMethods {
+				ok, err = method.Check(s.auth.username, s.auth.password)
+				if err != nil {
+					log.Errorln("(auth)", err)
+				}
+				if ok {
+					s.conn.Write(s.auth.Answer(0x00))
+					s.user = &models.User{Name: s.auth.username}
+					return s.user, nil
+				}
+			}
+
+			if !ok {
+				s.conn.Write(s.auth.Answer(0x01))
+				return nil, fmt.Errorf("socks5 client with username: \"%s\" and password: \"%s\" don't exists in our db", s.auth.username, s.auth.password)
+			}
 		}
 	}
-	if !ok {
-		return nil, fmt.Errorf("socks5 client don't provide supported authentication methods")
-	}
 
-	return request, nil
+	s.conn.Write(s.handshake.Answer(0xFF))
+	return nil, fmt.Errorf("socks5 client don't provide supported authentication methods")
 }
 
-func handshakeSocks5(s *Server, conn net.Conn, reader *bufio.Reader) (*clientRequest, error) {
-	request, err := handshakeSocks5AuthPart(s, conn, reader)
-	if err != nil {
-		return nil, err
+func (s *socks5Client) Request(reader *bufio.Reader) error {
+	var err error
+	if err = s.request.Read(reader); err != nil {
+		return err
 	}
 
-	version, err := reader.ReadByte()
-	if err != nil {
-		return nil, err
-	}
-	if version != 0x05 {
-		return nil, fmt.Errorf("socks5 client send unknown version for connection method")
-	}
-
-	command, err := reader.ReadByte()
-	if err != nil {
-		return nil, err
-	}
-
-	if command == 0x01 {
-		request.action = proxyActionConnection
-	} else if command == 0x02 {
+	if s.request.command == 0x01 {
+	} else if s.request.command == 0x02 {
 		if !s.config.Server.AllowTCPBind {
-			socks5SendAnswer(conn, 0x02, request)
-			return nil, fmt.Errorf("TCP binding disabled in config")
+			s.conn.Write(s.request.Answer(0x02))
+			return fmt.Errorf("TCP binding disabled in config")
 		}
-		request.action = proxyActionTCPBind
-	} else if command == 0x03 {
+	} else if s.request.command == 0x03 {
 		if !s.config.Server.AllowUDPAssociation {
-			socks5SendAnswer(conn, 0x02, request)
-			return nil, fmt.Errorf("UDP association disabled in config")
+			s.conn.Write(s.request.Answer(0x02))
+			return fmt.Errorf("UDP association disabled in config")
 		}
-		request.action = proxyActionUDPAssociation
 	} else {
-		return nil, fmt.Errorf("socks5 client send unknown command")
+		return fmt.Errorf("socks5 client send unknown command")
 	}
 
-	// Skip reserved byte
-	_, err = reader.ReadByte()
-	if err != nil {
-		return nil, err
-	}
+	return nil
+}
 
-	addrType, err := reader.ReadByte()
-	if err != nil {
-		return nil, err
-	}
-
-	if addrType == 0x01 {
-		ip := make([]byte, 4)
-		err = binary.Read(reader, binary.LittleEndian, &ip)
-		if err != nil {
-			return nil, err
-		}
-
-		request.addr = ip
-	} else if addrType == 0x03 {
-		domainLength, err := reader.ReadByte()
-		if err != nil {
-			return nil, err
-		}
-
-		domain := make([]byte, domainLength)
-		err = binary.Read(reader, binary.LittleEndian, &domain)
-		if err != nil {
-			return nil, err
-		}
-
-		request.domain = string(domain)
-	} else if addrType == 0x04 {
-		ip := make([]byte, 16)
-		//var ip [16]byte
-		err = binary.Read(reader, binary.LittleEndian, &ip)
-		if err != nil {
-			return nil, err
-		}
-
-		request.addr = ip
+func (s *socks5Client) Work() error {
+	var client string
+	if s.user != nil {
+		client = fmt.Sprintf("%s(%s)", s.conn.RemoteAddr().String(), s.user.Name)
 	} else {
-		return nil, fmt.Errorf("socks5 client send unknown remote address type")
+		client = s.conn.RemoteAddr().String()
 	}
 
-	var port uint16
-	err = binary.Read(reader, binary.BigEndian, &port)
-	if err != nil {
-		return nil, err
-	}
-	request.port = port
+	var err error
+	if s.request.command == 0x01 {
+		// CONNECT
+		var remoteAddr string
+		if s.request.useHostname {
+			remoteAddr = fmt.Sprintf("%s:%d", s.request.hostname, s.request.port)
+		} else {
+			remoteAddr = fmt.Sprintf("[%s]:%d", s.request.ip.String(), s.request.port)
+		}
 
-	socks5SendAnswer(conn, 0x00, request)
-	return request, nil
+		log.Infof("%s connecting to %s", client, remoteAddr)
+
+		var remote net.Conn
+		if s.request.useHostname {
+			if remote, err = connectHostname(s.request.hostname, s.request.port); err != nil {
+				s.conn.Write(s.request.Answer(0x04))
+				return err
+			}
+		} else {
+			if remote, err = connectIP(s.request.ip, s.request.port); err != nil {
+				s.conn.Write(s.request.Answer(0x04))
+				return err
+			}
+		}
+
+		s.conn.Write(s.request.Answer(0x00))
+
+		go proxyChannel(s.config, s.conn, remote)
+		proxyChannel(s.config, remote, s.conn)
+
+		return nil
+	} else if s.request.command == 0x02 {
+		// TCP BIND
+		port, err := s.server.GetTCPPort()
+		if err != nil {
+			s.conn.Write(s.request.Answer(0x01))
+			return err
+		}
+		defer s.server.FreeTCPPort(port)
+
+		var listener net.Listener
+		if s.config.Server.TCPBindAddrIsHostname {
+			listener, err = net.Listen("tcp", fmt.Sprintf("%s:%d", s.config.Server.TCPBindAddrHostname, port))
+		} else {
+			listener, err = net.Listen("tcp", fmt.Sprintf("%s:%d", s.config.Server.TCPBindAddrIP.String(), port))
+		}
+		if err != nil {
+			s.conn.Write(s.request.Answer(0x01))
+			return err
+		}
+		defer listener.Close()
+
+		tcpListener := listener.(*net.TCPListener)
+		tcpListener.SetDeadline(time.Now().Add(time.Duration(s.config.Server.Timeout) * time.Second))
+
+		if s.config.Server.TCPBindAddrIsHostname {
+			log.Infof("%s request tcp bind on %s:%d", client, s.config.Server.TCPBindAddrHostname, port)
+			s.conn.Write(s.request.AnswerBindHostname(0x00, s.config.Server.TCPBindAddrHostname, uint16(port)))
+		} else {
+			log.Infof("%s request tcp bind on [%s]:%d", client, s.config.Server.TCPBindAddrIP.String(), port)
+			s.conn.Write(s.request.AnswerBindIP(0x00, s.config.Server.TCPBindAddrIP, uint16(port)))
+		}
+
+		remote, err := listener.Accept()
+		if err != nil {
+			s.conn.Write(s.request.AnswerBindIP(0x06, s.config.Server.TCPBindAddrIP, uint16(port)))
+			return err
+		}
+		defer remote.Close()
+
+		remoteAddr := remote.RemoteAddr().(*net.TCPAddr)
+		log.Infof("%s get new tcp connection from %s", s.conn.RemoteAddr().String(), remote.RemoteAddr().String())
+		s.conn.Write(s.request.AnswerBindIP(0x00, remoteAddr.IP, uint16(remoteAddr.Port)))
+
+		go proxyChannel(s.config, s.conn, remote)
+		proxyChannel(s.config, remote, s.conn)
+
+		return nil
+	} else if s.request.command == 0x03 {
+		return nil
+	}
+
+	return fmt.Errorf("socks5 client send unknown command and somehow it was validated")
 }

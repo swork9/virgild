@@ -24,40 +24,46 @@ package socks
 
 import (
 	"bufio"
-	"net"
-
-	log "github.com/sirupsen/logrus"
+	"bytes"
+	"encoding/binary"
+	"fmt"
 )
 
-func handle(s *Server, conn net.Conn) {
-	defer conn.Close()
-	defer log.Debugln("Connection from", conn.RemoteAddr().String(), "closed")
-	log.Debugln("New connection from", conn.RemoteAddr().String())
+func readUntilNullByte(reader *bufio.Reader, limit int) ([]byte, error) {
+	var tmp byte
+	var err error
+	var buffer bytes.Buffer
 
-	reader := bufio.NewReader(conn)
-	socks, err := getSocksClientVersion(s, conn, reader)
+	ok := false
+	for i := 0; i < limit; i++ {
+		tmp, err = reader.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		if tmp == 0x00 {
+			ok = true
+			break
+		}
+		buffer.WriteByte(tmp)
+	}
+	if !ok {
+		return nil, fmt.Errorf("reading from socket until 0x00 failed")
+	}
+
+	return buffer.Bytes(), nil
+}
+
+func readNBytes(reader *bufio.Reader) (byte, []byte, error) {
+	len, err := reader.ReadByte()
 	if err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "version error:", err)
-		return
+		return 0, nil, err
 	}
 
-	if err = socks.Handshake(reader); err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "handshake error:", err)
-		return
+	data := make([]byte, len)
+	err = binary.Read(reader, binary.LittleEndian, &data)
+	if err != nil {
+		return 0, nil, err
 	}
 
-	if _, err = socks.Auth(reader, s.authMethods); err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "auth error:", err)
-		return
-	}
-
-	if err = socks.Request(reader); err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "request error:", err)
-		return
-	}
-
-	if err = socks.Work(); err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "error:", err)
-		return
-	}
+	return len, data, nil
 }

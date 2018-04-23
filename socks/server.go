@@ -24,7 +24,9 @@ package socks
 
 import (
 	"crypto/tls"
+	"fmt"
 	"net"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 
@@ -35,6 +37,11 @@ type Server struct {
 	listener net.Listener
 	tls      bool
 	work     bool
+
+	tcpPorts      map[int]bool
+	tcpPortsMutex *sync.Mutex
+	udpPorts      map[int]bool
+	udpPortsMutex *sync.Mutex
 
 	config      *models.Config
 	authMethods []models.AuthMethod
@@ -116,14 +123,58 @@ func (s *Server) Start() error {
 	return nil
 }
 
+func (s *Server) GetTCPPort() (int, error) {
+	s.tcpPortsMutex.Lock()
+	defer s.tcpPortsMutex.Unlock()
+
+	for i := s.config.Server.TCPBindPortsStart; i <= s.config.Server.TCPBindPortsEnd; i++ {
+		used := s.tcpPorts[i]
+		if !used {
+			s.tcpPorts[i] = true
+			return i, nil
+		}
+	}
+
+	return 0, fmt.Errorf("can't assign new tcp port for bind: all ports already in use")
+}
+
+func (s *Server) FreeTCPPort(port int) {
+	s.tcpPortsMutex.Lock()
+	defer s.tcpPortsMutex.Unlock()
+
+	s.tcpPorts[port] = false
+}
+
 func NewServer(config *models.Config, authMethods []models.AuthMethod) (*Server, error) {
-	server := &Server{tls: false, work: true, config: config, authMethods: authMethods}
+	server := &Server{
+		tls:  false,
+		work: true,
+
+		tcpPorts:      map[int]bool{},
+		tcpPortsMutex: &sync.Mutex{},
+		udpPorts:      map[int]bool{},
+		udpPortsMutex: &sync.Mutex{},
+
+		config:      config,
+		authMethods: authMethods,
+	}
 
 	return server, nil
 }
 
 func NewTLSServer(config *models.Config, authMethods []models.AuthMethod) (*Server, error) {
-	server := &Server{tls: true, work: true, config: config, authMethods: authMethods}
+	server := &Server{
+		tls:  true,
+		work: true,
+
+		tcpPorts:      map[int]bool{},
+		tcpPortsMutex: &sync.Mutex{},
+		udpPorts:      map[int]bool{},
+		udpPortsMutex: &sync.Mutex{},
+
+		config:      config,
+		authMethods: authMethods,
+	}
 
 	return server, nil
 }

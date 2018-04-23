@@ -24,40 +24,23 @@ package socks
 
 import (
 	"bufio"
+	"fmt"
 	"net"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/swork9/virgild/models"
 )
 
-func handle(s *Server, conn net.Conn) {
-	defer conn.Close()
-	defer log.Debugln("Connection from", conn.RemoteAddr().String(), "closed")
-	log.Debugln("New connection from", conn.RemoteAddr().String())
-
-	reader := bufio.NewReader(conn)
-	socks, err := getSocksClientVersion(s, conn, reader)
+func getSocksClientVersion(s *Server, conn net.Conn, reader *bufio.Reader) (models.SocksClient, error) {
+	socksVersion, err := reader.ReadByte()
 	if err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "version error:", err)
-		return
+		return nil, err
 	}
 
-	if err = socks.Handshake(reader); err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "handshake error:", err)
-		return
-	}
-
-	if _, err = socks.Auth(reader, s.authMethods); err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "auth error:", err)
-		return
-	}
-
-	if err = socks.Request(reader); err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "request error:", err)
-		return
-	}
-
-	if err = socks.Work(); err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "error:", err)
-		return
+	if socksVersion == 0x04 {
+		return &socks4Client{server: s, config: s.config, conn: conn}, nil
+	} else if socksVersion == 0x05 {
+		return &socks5Client{server: s, config: s.config, conn: conn}, nil
+	} else {
+		return nil, fmt.Errorf("client send unknown socks version")
 	}
 }

@@ -28,105 +28,213 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"time"
+
+	log "github.com/sirupsen/logrus"
+
+	"github.com/swork9/virgild/models"
 )
 
-type handshakeSocks4Answer struct {
-	null    byte
-	result  byte
-	ignore0 [2]byte
-	ignore1 [4]byte
+type socks4Client struct {
+	server      *Server
+	config      *models.Config
+	conn        net.Conn
+	useHostname bool
+
+	command  byte
+	port     uint16
+	ip       net.IP
+	userID   []byte
+	hostname string
 }
 
-func socks4SendAnswer(conn net.Conn, code byte) {
-	answer := &handshakeSocks4Answer{}
+func (s *socks4Client) Read(reader *bufio.Reader) error {
+	var err error
+	if s.command, err = reader.ReadByte(); err != nil {
+		return err
+	}
+	if err = binary.Read(reader, binary.BigEndian, &s.port); err != nil {
+		return err
+	}
+	ip := make([]byte, 4)
+	if err = binary.Read(reader, binary.LittleEndian, &ip); err != nil {
+		return err
+	}
+	if s.userID, err = readUntilNullByte(reader, 256); err != nil {
+		return err
+	}
+
+	if ip[0] == 0x00 && ip[1] == 0x00 && ip[2] == 0x00 && ip[3] != 0x00 {
+		var t []byte
+		if t, err = readUntilNullByte(reader, 256); err != nil {
+			return err
+		}
+
+		s.hostname = string(t)
+		s.useHostname = true
+	} else {
+		s.ip = ip
+	}
+
+	return nil
+}
+
+func (s *socks4Client) Answer(code byte) []byte {
+	answer := &struct {
+		null       byte
+		result     byte
+		ignorePort [2]byte
+		ignoreIP   [4]byte
+	}{}
+
 	answer.null = 0x00
 	answer.result = code
 
 	var buffer bytes.Buffer
 	binary.Write(&buffer, binary.LittleEndian, answer)
 
-	conn.Write(buffer.Bytes())
+	return buffer.Bytes()
 }
 
-func handshakeSocks4(s *Server, conn net.Conn, reader *bufio.Reader) (*clientRequest, error) {
+func (s *socks4Client) AnswerBind(code byte, ip net.IP, port uint16) []byte {
+	answer := &struct {
+		null   byte
+		result byte
+	}{}
+
+	answer.null = 0x00
+	answer.result = code
+
+	var buffer bytes.Buffer
+	binary.Write(&buffer, binary.LittleEndian, answer)
+
+	binary.Write(&buffer, binary.BigEndian, port)
+	binary.Write(&buffer, binary.LittleEndian, ip.To4())
+
+	return buffer.Bytes()
+}
+
+func (s *socks4Client) Validate() error {
 	if !s.config.Server.AllowAnonymous {
-		socks4SendAnswer(conn, 0x5B)
-		return nil, fmt.Errorf("socks4 don't support authentication and anonymous access disabled in config")
+		s.conn.Write(s.Answer(0x5B))
+		return fmt.Errorf("socks4 don't support authentication and anonymous access disabled in config")
 	}
 
-	command, err := reader.ReadByte()
-	if err != nil {
-		return nil, err
-	}
-
-	request := &clientRequest{}
-	if command == 0x01 {
-		request.action = proxyActionConnection
-	} else if command == 0x02 {
+	if s.command == 0x01 {
+	} else if s.command == 0x02 {
 		if !s.config.Server.AllowTCPBind {
-			socks4SendAnswer(conn, 0x5B)
-			return nil, fmt.Errorf("TCP binding disabled in config")
+			s.conn.Write(s.Answer(0x5B))
+			return fmt.Errorf("TCP binding disabled in config")
 		}
-		request.action = proxyActionTCPBind
 	} else {
-		return nil, fmt.Errorf("socks4 client send unknown command")
+		return fmt.Errorf("socks4 client send unknown command")
 	}
 
-	var port uint16
-	err = binary.Read(reader, binary.BigEndian, &port)
-	if err != nil {
-		return nil, err
-	}
-	request.port = port
+	return nil
+}
 
-	ip := make([]byte, 4)
-	err = binary.Read(reader, binary.LittleEndian, &ip)
-	if err != nil {
-		return nil, err
+func (s *socks4Client) Handshake(reader *bufio.Reader) error {
+	var err error
+	if err = s.Read(reader); err != nil {
+		return err
+	}
+	if err = s.Validate(); err != nil {
+		return err
 	}
 
-	// Skip username
-	ok := false
-	var tmp byte
-	for i := 0; i < 256; i++ {
-		tmp, err = reader.ReadByte()
+	return nil
+}
+
+func (s *socks4Client) Auth(reader *bufio.Reader, authMethods []models.AuthMethod) (*models.User, error) {
+	// Socks4 don't support authentication (ident not what we want, huh)
+
+	return nil, nil
+}
+
+func (s *socks4Client) Request(reader *bufio.Reader) error {
+	// For socks4 nothing to do.
+
+	return nil
+}
+
+func (s *socks4Client) Work() error {
+	var err error
+	if s.command == 0x01 {
+		// CONNECT
+		var remoteAddr string
+		if s.useHostname {
+			remoteAddr = fmt.Sprintf("%s:%d", s.hostname, s.port)
+		} else {
+			remoteAddr = fmt.Sprintf("[%s]:%d", s.ip.String(), s.port)
+		}
+
+		log.Infof("%s connecting to %s", s.conn.RemoteAddr().String(), remoteAddr)
+
+		var remote net.Conn
+		if s.useHostname {
+			if remote, err = connectHostname(s.hostname, s.port); err != nil {
+				s.conn.Write(s.Answer(0x5B))
+				return err
+			}
+		} else {
+			if remote, err = connectIP(s.ip, s.port); err != nil {
+				s.conn.Write(s.Answer(0x5B))
+				return err
+			}
+		}
+
+		s.conn.Write(s.Answer(0x5A))
+
+		go proxyChannel(s.config, s.conn, remote)
+		proxyChannel(s.config, remote, s.conn)
+
+		return nil
+	} else if s.command == 0x02 {
+		// TCP BIND
+		if s.config.Server.TCPBindAddrIsHostname {
+			s.conn.Write(s.Answer(0x5B))
+			return fmt.Errorf("socks4 don't support tcp binding on hostname, please, use socks5 or change your config")
+		} else if len(s.config.Server.TCPBindAddrIP) != 4 {
+			s.conn.Write(s.Answer(0x5B))
+			return fmt.Errorf("socks4 don't support tcp binding on ipv6, please, use socks5 or change your config")
+		}
+
+		port, err := s.server.GetTCPPort()
 		if err != nil {
-			return nil, err
+			s.conn.Write(s.Answer(0x5B))
+			return err
 		}
-		if tmp == 0x00 {
-			ok = true
-			break
+		defer s.server.FreeTCPPort(port)
+
+		listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", s.config.Server.TCPBindAddrIP.String(), port))
+		if err != nil {
+			s.conn.Write(s.Answer(0x5B))
+			return err
 		}
-	}
-	if !ok {
-		return nil, fmt.Errorf("socks4 username more then 256 bytes, aborting")
+		defer listener.Close()
+
+		tcpListener := listener.(*net.TCPListener)
+		tcpListener.SetDeadline(time.Now().Add(time.Duration(s.config.Server.Timeout) * time.Second))
+
+		log.Infof("%s request tcp bind on %s:%d", s.conn.RemoteAddr().String(), s.config.Server.TCPBindAddrIP.String(), port)
+		s.conn.Write(s.AnswerBind(0x5A, s.config.Server.TCPBindAddrIP, uint16(port)))
+
+		remote, err := listener.Accept()
+		if err != nil {
+			s.conn.Write(s.AnswerBind(0x5B, s.config.Server.TCPBindAddrIP, uint16(port)))
+			return err
+		}
+		defer remote.Close()
+
+		remoteAddr := remote.RemoteAddr().(*net.TCPAddr)
+		log.Infof("%s get new tcp connection from %s", s.conn.RemoteAddr().String(), remote.RemoteAddr().String())
+		s.conn.Write(s.AnswerBind(0x5A, remoteAddr.IP, uint16(remoteAddr.Port)))
+
+		go proxyChannel(s.config, s.conn, remote)
+		proxyChannel(s.config, remote, s.conn)
+
+		return nil
 	}
 
-	// Check for socks4a
-	if ip[0] == 0x00 && ip[1] == 0x00 && ip[2] == 0x00 && ip[3] != 0x00 {
-		ok = false
-		var buffer bytes.Buffer
-		for i := 0; i < 256; i++ {
-			tmp, err = reader.ReadByte()
-			if err != nil {
-				return nil, err
-			}
-			if tmp == 0x00 {
-				ok = true
-				break
-			}
-			buffer.WriteByte(tmp)
-		}
-		if !ok {
-			return nil, fmt.Errorf("socks4a domain name more then 256 bytes, aborting")
-		}
-
-		// Remove 0x00
-		request.domain = string(buffer.Bytes())
-	} else {
-		request.addr = ip
-	}
-
-	socks4SendAnswer(conn, 0x5A)
-	return request, nil
+	return fmt.Errorf("socks4 client send unknown command and somehow it was validated")
 }
