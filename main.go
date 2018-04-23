@@ -99,6 +99,26 @@ func main() {
 			config.Server.TCPBindAddrHostname = config.Server.TCPBindAddr
 		}
 	}
+	if config.Server.AllowUDPAssociation {
+		if config.Server.UDPAssociationPortsEnd-config.Server.UDPAssociationPortsStart < 0 {
+			log.Fatalln("(udp bind) you must setup at least 1 udp port for association.")
+		}
+		if len(config.Server.UDPAssociationAddr) == 0 {
+			log.Fatalln("(udp bind) you must setup your external ip (or hostname) for udp association.")
+		}
+
+		config.Server.UDPAssociationAddrIP = net.ParseIP(config.Server.UDPAssociationAddr)
+		if config.Server.UDPAssociationAddrIP != nil {
+			// Just fix to make sure, that UDPAssociationAddrIP have 4 bytes in net.IP slice.
+			t := config.Server.UDPAssociationAddrIP.To4()
+			if t != nil {
+				config.Server.UDPAssociationAddrIP = t
+			}
+		} else {
+			config.Server.UDPAssociationAddrIsHostname = true
+			config.Server.UDPAssociationAddrHostname = config.Server.UDPAssociationAddr
+		}
+	}
 
 	authMethods, err := config.GetAuthMethods()
 	if err != nil {

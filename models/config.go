@@ -57,7 +57,15 @@ type ServerConfig struct {
 	TCPBindAddrIP         net.IP
 	TCPBindAddrHostname   string
 
-	AllowUDPAssociation bool
+	AllowUDPAssociation      bool
+	UDPAssociationAddr       string
+	UDPAssociationPortsStart int
+	UDPAssociationPortsEnd   int
+
+	// Don't use it in your config file, please, it's for internal use.
+	UDPAssociationAddrIsHostname bool
+	UDPAssociationAddrIP         net.IP
+	UDPAssociationAddrHostname   string
 
 	LogLevel string
 	LogFile  string

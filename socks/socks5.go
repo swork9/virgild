@@ -208,14 +208,14 @@ func (s *socks5Request) Answer(result byte) []byte {
 	return buffer.Bytes()
 }
 
-func (s *socks5Request) AnswerBindIP(result byte, ip net.IP, port uint16) []byte {
+func (s *socks5Request) AnswerBindIP(version byte, result byte, ip net.IP, port uint16) []byte {
 	answer := struct {
 		version  byte
 		result   byte
 		reserved byte
 	}{}
 
-	answer.version = 0x05
+	answer.version = version
 	answer.result = result
 	answer.reserved = 0x00
 
@@ -235,14 +235,14 @@ func (s *socks5Request) AnswerBindIP(result byte, ip net.IP, port uint16) []byte
 	return buffer.Bytes()
 }
 
-func (s *socks5Request) AnswerBindHostname(result byte, hostname string, port uint16) []byte {
+func (s *socks5Request) AnswerBindHostname(version byte, result byte, hostname string, port uint16) []byte {
 	answer := struct {
 		version  byte
 		result   byte
 		reserved byte
 	}{}
 
-	answer.version = 0x05
+	answer.version = version
 	answer.result = result
 	answer.reserved = 0x00
 
@@ -312,6 +312,10 @@ func (s *socks5Client) Request(reader *bufio.Reader) error {
 	var err error
 	if err = s.request.Read(reader); err != nil {
 		return err
+	}
+
+	if s.request.version != 0x05 {
+		return fmt.Errorf("socks5 client send wrong request version")
 	}
 
 	if s.request.command == 0x01 {
@@ -397,29 +401,65 @@ func (s *socks5Client) Work() error {
 
 		if s.config.Server.TCPBindAddrIsHostname {
 			log.Infof("%s request tcp bind on %s:%d", client, s.config.Server.TCPBindAddrHostname, port)
-			s.conn.Write(s.request.AnswerBindHostname(0x00, s.config.Server.TCPBindAddrHostname, uint16(port)))
+			s.conn.Write(s.request.AnswerBindHostname(0x05, 0x00, s.config.Server.TCPBindAddrHostname, uint16(port)))
 		} else {
 			log.Infof("%s request tcp bind on [%s]:%d", client, s.config.Server.TCPBindAddrIP.String(), port)
-			s.conn.Write(s.request.AnswerBindIP(0x00, s.config.Server.TCPBindAddrIP, uint16(port)))
+			s.conn.Write(s.request.AnswerBindIP(0x05, 0x00, s.config.Server.TCPBindAddrIP, uint16(port)))
 		}
 
 		remote, err := listener.Accept()
 		if err != nil {
-			s.conn.Write(s.request.AnswerBindIP(0x06, s.config.Server.TCPBindAddrIP, uint16(port)))
+			s.conn.Write(s.request.AnswerBindIP(0x05, 0x06, s.config.Server.TCPBindAddrIP, uint16(port)))
 			return err
 		}
 		defer remote.Close()
 
 		remoteAddr := remote.RemoteAddr().(*net.TCPAddr)
 		log.Infof("%s get new tcp connection from %s", s.conn.RemoteAddr().String(), remote.RemoteAddr().String())
-		s.conn.Write(s.request.AnswerBindIP(0x00, remoteAddr.IP, uint16(remoteAddr.Port)))
+		s.conn.Write(s.request.AnswerBindIP(0x05, 0x00, remoteAddr.IP, uint16(remoteAddr.Port)))
 
 		go proxyChannel(s.config, s.conn, remote)
 		proxyChannel(s.config, remote, s.conn)
 
 		return nil
 	} else if s.request.command == 0x03 {
-		return nil
+		// UDP ASSOCIATION
+		port, err := s.server.GetUDPPort()
+		if err != nil {
+			s.conn.Write(s.request.Answer(0x01))
+			return err
+		}
+		defer s.server.FreeUDPPort(port)
+
+		var listener net.PacketConn
+		if s.config.Server.TCPBindAddrIsHostname {
+			listener, err = net.ListenPacket("udp", fmt.Sprintf("%s:%d", s.config.Server.UDPAssociationAddrHostname, port))
+		} else {
+			listener, err = net.ListenPacket("udp", fmt.Sprintf("%s:%d", s.config.Server.UDPAssociationAddrIP.String(), port))
+		}
+		if err != nil {
+			s.conn.Write(s.request.Answer(0x01))
+			return err
+		}
+		defer listener.Close()
+
+		if s.config.Server.TCPBindAddrIsHostname {
+			log.Infof("%s request udp association to %s:%d", client, s.config.Server.UDPAssociationAddrHostname, port)
+			s.conn.Write(s.request.AnswerBindHostname(0x05, 0x00, s.config.Server.UDPAssociationAddrHostname, uint16(port)))
+		} else {
+			log.Infof("%s request udp association to [%s]:%d", client, s.config.Server.UDPAssociationAddrIP.String(), port)
+			s.conn.Write(s.request.AnswerBindIP(0x05, 0x00, s.config.Server.UDPAssociationAddrIP, uint16(port)))
+		}
+
+		go udpAssociate(s.config, listener)
+
+		ignore := make([]byte, 32)
+		for {
+			_, err = s.conn.Read(ignore)
+			if err != nil {
+				return nil
+			}
+		}
 	}
 
 	return fmt.Errorf("socks5 client send unknown command and somehow it was validated")

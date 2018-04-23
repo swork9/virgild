@@ -145,6 +145,28 @@ func (s *Server) FreeTCPPort(port int) {
 	s.tcpPorts[port] = false
 }
 
+func (s *Server) GetUDPPort() (int, error) {
+	s.udpPortsMutex.Lock()
+	defer s.udpPortsMutex.Unlock()
+
+	for i := s.config.Server.UDPAssociationPortsStart; i <= s.config.Server.UDPAssociationPortsEnd; i++ {
+		used := s.udpPorts[i]
+		if !used {
+			s.udpPorts[i] = true
+			return i, nil
+		}
+	}
+
+	return 0, fmt.Errorf("can't assign new udp port for bind: all ports already in use")
+}
+
+func (s *Server) FreeUDPPort(port int) {
+	s.udpPortsMutex.Lock()
+	defer s.udpPortsMutex.Unlock()
+
+	s.udpPorts[port] = false
+}
+
 func NewServer(config *models.Config, authMethods []models.AuthMethod) (*Server, error) {
 	server := &Server{
 		tls:  false,
