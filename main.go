@@ -181,6 +181,10 @@ func main() {
 		}
 	}
 
+	for _, a := range authMethods {
+		a.Close()
+	}
+
 	log.Warn("Exiting... Have a nice day.")
 
 }

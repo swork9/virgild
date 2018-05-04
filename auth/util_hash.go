@@ -23,61 +23,50 @@ SOFTWARE. */
 package auth
 
 import (
-	"io/ioutil"
-	"strings"
+	"crypto/md5"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/hex"
+	"fmt"
+	"hash"
 )
 
-type AuthPlain struct {
-	file   string
-	hasher *authHasher
-	users  map[string]string
+type hashType int
+
+const (
+	hashMD5 hashType = iota
+	hashSHA256
+	hashSHA512
+)
+
+type authHasher struct {
+	hashMethod hashType
 }
 
-func (a *AuthPlain) GetName() string {
-	return "plain"
+func (a *authHasher) Hash(data string) string {
+	var hasher hash.Hash
+	if a.hashMethod == hashMD5 {
+		hasher = md5.New()
+	} else if a.hashMethod == hashSHA256 {
+		hasher = sha256.New()
+	} else if a.hashMethod == hashSHA512 {
+		hasher = sha512.New()
+	} else {
+		return ""
+	}
+
+	hasher.Write([]byte(data))
+	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-func (a *AuthPlain) Init() error {
-	data, err := ioutil.ReadFile(a.file)
-	if err != nil {
-		return err
+func newHasher(hashMethod string) (*authHasher, error) {
+	if hashMethod == "md5" {
+		return &authHasher{hashMD5}, nil
+	} else if hashMethod == "sha256" {
+		return &authHasher{hashSHA256}, nil
+	} else if hashMethod == "sha512" {
+		return &authHasher{hashSHA512}, nil
+	} else {
+		return nil, fmt.Errorf("auth don't support hash method:", hashMethod)
 	}
-
-	a.users = map[string]string{}
-	for _, i := range strings.Split(string(data), "\n") {
-		s := strings.SplitN(i, ":", 2)
-		if len(s) == 2 && len(s[0]) > 0 && len(s[1]) > 0 {
-			a.users[s[0]] = s[1]
-		}
-	}
-
-	return nil
-}
-
-func (a *AuthPlain) Close() error {
-	return nil
-}
-
-func (a *AuthPlain) Check(username, password string) (bool, error) {
-	hashedPassword, ok := a.users[username]
-	if !ok {
-		return false, nil
-	}
-
-	if hashedPassword == a.hasher.Hash(password) {
-		return true, nil
-	}
-
-	return false, nil
-}
-
-func NewAuthPlain(file, hashMethod string) (*AuthPlain, error) {
-	hasher, err := newHasher(hashMethod)
-	if err != nil {
-		return nil, err
-	}
-
-	auth := &AuthPlain{file: file, hasher: hasher, users: map[string]string{}}
-
-	return auth, nil
 }

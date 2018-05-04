@@ -75,6 +75,11 @@ type AuthSQLConfig struct {
 	DBType           string
 	DBConnection     string
 	DBMaxConnections int
+
+	HashMethod   string
+	CacheTimeout int64
+
+	QuerySelectUser string
 }
 
 type AuthPlainTextConfig struct {
@@ -94,6 +99,26 @@ func (c *Config) GetAuthMethods() ([]AuthMethod, error) {
 		}
 
 		authMethods = append(authMethods, authPlain)
+	}
+	if len(c.AuthSQL.DBType) > 0 {
+		authSQL, err := auth.NewAuthSQL(
+			c.AuthSQL.DBType,
+			c.AuthSQL.DBConnection,
+			c.AuthSQL.DBMaxConnections,
+
+			c.AuthSQL.HashMethod,
+			c.AuthSQL.CacheTimeout,
+
+			c.AuthSQL.QuerySelectUser,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if err = authSQL.Init(); err != nil {
+			return nil, err
+		}
+
+		authMethods = append(authMethods, authSQL)
 	}
 
 	return authMethods, nil
