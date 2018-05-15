@@ -50,7 +50,7 @@ func (h *httpClient) Answer(status string) []byte {
 
 func (h *httpClient) Handshake(reader *bufio.Reader) error {
 	if !h.config.Server.AllowHTTPConnect {
-		return fmt.Errorf("http CONNECT disabled in config")
+		return fmt.Errorf("HTTP CONNECT disabled in config")
 	}
 	h.headers = map[string]string{}
 
@@ -155,7 +155,7 @@ func (h *httpClient) Work() error {
 		return err
 	}
 
-	h.conn.Write(h.Answer("200 Connection established"))
+	h.conn.Write(h.Answer("200 Connection Established"))
 
 	go proxyChannel(h.config, h.conn, remote)
 	proxyChannel(h.config, remote, h.conn)
