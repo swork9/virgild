@@ -21,7 +21,7 @@ To compile virgild from sources, you'll need golang (https://golang.org/).
 git clone https://github.com/swork9/virgild
 cd virgild
 go get -d ./...
-go build
+go build -v -tags db_mysql db_odbc db_sqlite db_postgresql
 ```
 
 ##### Updating

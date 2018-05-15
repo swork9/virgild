@@ -26,12 +26,6 @@ import (
 	"database/sql"
 	"sync"
 	"time"
-
-	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/lib/pq"
-	_ "github.com/mattn/go-sqlite3"
-	// Uncomment next line, if you need ODBC driver
-	//_ "github.com/alexbrainman/odbc"
 )
 
 type cachedUser struct {
