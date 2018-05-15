@@ -24,6 +24,7 @@ package proxy
 
 import (
 	"bufio"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"strconv"
@@ -65,7 +66,6 @@ func (h *httpClient) Handshake(reader *bufio.Reader) error {
 		}
 		// Remove '\r' from slice
 		line = line[0 : len(line)-1]
-		fmt.Println("DEBUG:", string(line), len(line))
 
 		n, err = reader.ReadByte()
 		if err != nil {
@@ -86,8 +86,7 @@ func (h *httpClient) Handshake(reader *bufio.Reader) error {
 				continue
 			}
 
-			h.headers[header[0]] = header[1]
-			fmt.Println("HEADER:", header)
+			h.headers[strings.ToLower(header[0])] = header[1]
 		} else {
 			connect := strings.SplitN(string(line), " ", 3)
 			if len(connect) != 3 {
@@ -118,17 +117,56 @@ func (h *httpClient) Handshake(reader *bufio.Reader) error {
 		return fmt.Errorf("http client send empty host and port")
 	}
 
-	fmt.Println(h.headers)
-	fmt.Println(h.hostname)
-	fmt.Println(h.port)
-
 	return nil
 }
 
+func (h *httpClient) GetUserPassword() (string, string, error) {
+	encoded, ok := h.headers["proxy-authorization"]
+	if !ok {
+		return "", "", fmt.Errorf("http client don't provide authentication credentials")
+	}
+
+	if strings.HasSuffix(strings.ToLower(encoded), "basic ") {
+		return "", "", fmt.Errorf("http client authentication not looks like \"Basic\"")
+	}
+
+	baseEncoded, err := base64.StdEncoding.DecodeString(encoded[6:])
+	if err != nil {
+		return "", "", err
+	}
+
+	credentials := strings.SplitN(string(baseEncoded), ":", 2)
+	if len(credentials) != 2 {
+		return "", "", fmt.Errorf("http client authentication credentials can't be extracted")
+	}
+
+	return credentials[0], credentials[1], nil
+}
+
 func (h *httpClient) Auth(reader *bufio.Reader, authMethods []models.AuthMethod) (*models.User, error) {
-	if !h.config.Server.AllowAnonymous {
-		h.conn.Write(h.Answer("403 Forbidden"))
-		return nil, fmt.Errorf("http don't support authentication and anonymous access disabled in config")
+	username, password, err := h.GetUserPassword()
+	if err != nil {
+		if !h.config.Server.AllowAnonymous {
+			h.conn.Write(h.Answer("407 Proxy Authentication Required\r\nProxy-Authenticate: Basic"))
+			return nil, err
+		}
+	} else {
+		ok := false
+		for _, method := range authMethods {
+			ok, err = method.Check(username, password)
+			if err != nil {
+				log.Errorln("(auth)", err)
+			}
+			if ok {
+				h.user = &models.User{Name: username}
+				return h.user, nil
+			}
+		}
+
+		if !ok {
+			h.conn.Write(h.Answer("403 Forbidden"))
+			return nil, fmt.Errorf("socks5 client with username: \"%s\" and password: \"%s\" don't exists in our db", username, password)
+		}
 	}
 
 	return nil, nil
