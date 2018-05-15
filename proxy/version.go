@@ -20,4 +20,30 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-package socks
+package proxy
+
+import (
+	"bufio"
+	"fmt"
+	"net"
+
+	"github.com/swork9/virgild/models"
+)
+
+func getProxyClientVersion(s *Server, conn net.Conn, reader *bufio.Reader) (models.ProxyClient, error) {
+	socksVersion, err := reader.ReadByte()
+	if err != nil {
+		return nil, err
+	}
+
+	if socksVersion == 0x04 {
+		return &socks4Client{server: s, config: s.config, conn: conn}, nil
+	} else if socksVersion == 0x05 {
+		return &socks5Client{server: s, config: s.config, conn: conn}, nil
+		// Looks like it's http CONNECT, so try it.
+	} else if socksVersion == 'C' {
+		return &httpClient{server: s, config: s.config, conn: conn}, nil
+	} else {
+		return nil, fmt.Errorf("client send unknown socks version")
+	}
+}

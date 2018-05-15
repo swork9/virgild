@@ -32,7 +32,7 @@ import (
 	"gopkg.in/gcfg.v1"
 
 	"github.com/swork9/virgild/models"
-	"github.com/swork9/virgild/socks"
+	"github.com/swork9/virgild/proxy"
 )
 
 var (
@@ -129,15 +129,15 @@ func main() {
 		log.Fatalln("(auth) current configuration will not work, because anonymous login disabled and no other auth methods configured.")
 	}
 
-	socksServers := []*socks.Server{}
+	proxyServers := []*proxy.Server{}
 	if len(config.Server.Bind) > 0 {
 		var err error
-		var server *socks.Server
+		var server *proxy.Server
 		if len(config.Server.PrivateKey) > 0 && len(config.Server.PublicKey) > 0 {
 			/// If you want to generate self signed cert for server, use something like this: openssl req -x509 -newkey rsa:4096 -keyout private.key -out public.key -nodes -days 365
-			server, err = socks.NewTLSServer(config, authMethods)
+			server, err = proxy.NewTLSServer(config, authMethods)
 		} else {
-			server, err = socks.NewServer(config, authMethods)
+			server, err = proxy.NewServer(config, authMethods)
 		}
 		if err != nil {
 			log.Fatalln("(socks server)", err)
@@ -146,16 +146,16 @@ func main() {
 		if err != nil {
 			log.Fatalln("(socks server)", err)
 		}
-		socksServers = append(socksServers, server)
+		proxyServers = append(proxyServers, server)
 	}
 
-	if len(socksServers) == 0 {
+	if len(proxyServers) == 0 {
 		log.Fatalln("(socks server) nothing to start, please configure [server] config section")
 	}
 
 	errc := make(chan error)
-	for _, server := range socksServers {
-		go func(server *socks.Server) {
+	for _, server := range proxyServers {
+		go func(server *proxy.Server) {
 			defer server.Close()
 			defer func() {
 				if r := recover(); r != nil {
@@ -172,7 +172,7 @@ func main() {
 		}(server)
 	}
 
-	for i := 0; i < len(socksServers); i++ {
+	for i := 0; i < len(proxyServers); i++ {
 		select {
 		case err := <-errc:
 			if err != nil {

@@ -20,15 +20,62 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-package models
+package proxy
 
 import (
-	"bufio"
+	"fmt"
+	"net"
+	"time"
+
+	"github.com/swork9/virgild/models"
 )
 
-type SocksClient interface {
-	Handshake(reader *bufio.Reader) error
-	Auth(reader *bufio.Reader, authMethods []AuthMethod) (*User, error)
-	Request(reader *bufio.Reader) error
-	Work() error
+func connectIP(ip net.IP, port uint16) (net.Conn, error) {
+	c, err := net.DialTCP("tcp", nil, &net.TCPAddr{IP: ip, Port: int(port)})
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
+func connectHostname(host string, port uint16) (net.Conn, error) {
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, ip := range ips {
+		c, err := connectIP(ip, port)
+		if err == nil {
+			return c, nil
+		}
+	}
+
+	return nil, fmt.Errorf("destination host unreachable")
+}
+
+func proxyChannel(config *models.Config, from net.Conn, to net.Conn) {
+	defer from.Close()
+	defer to.Close()
+
+	var ret int
+	var err error
+	buffer := make([]byte, config.Server.Buffer)
+
+	timeoutDuration := time.Duration(config.Server.Timeout) * time.Second
+
+	for {
+		from.SetReadDeadline(time.Now().Add(timeoutDuration))
+
+		ret, err = from.Read(buffer)
+		if err != nil {
+			return
+		}
+
+		_, err = to.Write(buffer[0:ret])
+		if err != nil {
+			return
+		}
+	}
 }

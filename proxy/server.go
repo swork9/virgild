@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-package socks
+package proxy
 
 import (
 	"crypto/tls"
@@ -96,16 +96,18 @@ func (s *Server) Start() error {
 		log.Infof("Starting new tls socks server. Configuration:\n"+
 			"Bind:\t\t\t\t%s\n"+
 			"Auth methods:\t\t\t%s\n"+
+			"HTTP CONNECT allowed:\t\t%t\n"+
 			"TCP bind allowed:\t\t%t\n"+
 			"UDP association allowed:\t%t\n",
-			s.config.Server.Bind, authMethods, s.config.Server.AllowTCPBind, s.config.Server.AllowUDPAssociation)
+			s.config.Server.Bind, authMethods, s.config.Server.AllowHTTPConnect, s.config.Server.AllowTCPBind, s.config.Server.AllowUDPAssociation)
 	} else {
 		log.Infof("Starting new socks server. Configuration:\n"+
 			"Bind:\t\t\t\t%s\n"+
 			"Auth methods:\t\t\t%s\n"+
+			"HTTP CONNECT allowed:\t\t%t\n"+
 			"TCP bind allowed:\t\t%t\n"+
 			"UDP association allowed:\t%t\n",
-			s.config.Server.Bind, authMethods, s.config.Server.AllowTCPBind, s.config.Server.AllowUDPAssociation)
+			s.config.Server.Bind, authMethods, s.config.Server.AllowHTTPConnect, s.config.Server.AllowTCPBind, s.config.Server.AllowUDPAssociation)
 	}
 
 	for s.work {

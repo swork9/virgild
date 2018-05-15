@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-package socks
+package proxy
 
 import (
 	"bufio"
@@ -35,28 +35,28 @@ func handle(s *Server, conn net.Conn) {
 	log.Debugln("New connection from", conn.RemoteAddr().String())
 
 	reader := bufio.NewReader(conn)
-	socks, err := getSocksClientVersion(s, conn, reader)
+	proxy, err := getProxyClientVersion(s, conn, reader)
 	if err != nil {
 		log.Errorln("client:", conn.RemoteAddr().String(), "version error:", err)
 		return
 	}
 
-	if err = socks.Handshake(reader); err != nil {
+	if err = proxy.Handshake(reader); err != nil {
 		log.Errorln("client:", conn.RemoteAddr().String(), "handshake error:", err)
 		return
 	}
 
-	if _, err = socks.Auth(reader, s.authMethods); err != nil {
+	if _, err = proxy.Auth(reader, s.authMethods); err != nil {
 		log.Errorln("client:", conn.RemoteAddr().String(), "auth error:", err)
 		return
 	}
 
-	if err = socks.Request(reader); err != nil {
+	if err = proxy.Request(reader); err != nil {
 		log.Errorln("client:", conn.RemoteAddr().String(), "request error:", err)
 		return
 	}
 
-	if err = socks.Work(); err != nil {
+	if err = proxy.Work(); err != nil {
 		log.Errorln("client:", conn.RemoteAddr().String(), "error:", err)
 		return
 	}

@@ -20,27 +20,50 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-package socks
+package proxy
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/binary"
 	"fmt"
-	"net"
-
-	"github.com/swork9/virgild/models"
 )
 
-func getSocksClientVersion(s *Server, conn net.Conn, reader *bufio.Reader) (models.SocksClient, error) {
-	socksVersion, err := reader.ReadByte()
-	if err != nil {
-		return nil, err
+func readUntilNullByte(reader *bufio.Reader, limit int) ([]byte, error) {
+	var tmp byte
+	var err error
+	var buffer bytes.Buffer
+
+	ok := false
+	for i := 0; i < limit; i++ {
+		tmp, err = reader.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		if tmp == 0x00 {
+			ok = true
+			break
+		}
+		buffer.WriteByte(tmp)
+	}
+	if !ok {
+		return nil, fmt.Errorf("reading from socket until 0x00 failed")
 	}
 
-	if socksVersion == 0x04 {
-		return &socks4Client{server: s, config: s.config, conn: conn}, nil
-	} else if socksVersion == 0x05 {
-		return &socks5Client{server: s, config: s.config, conn: conn}, nil
-	} else {
-		return nil, fmt.Errorf("client send unknown socks version")
+	return buffer.Bytes(), nil
+}
+
+func readNBytes(reader *bufio.Reader) (byte, []byte, error) {
+	len, err := reader.ReadByte()
+	if err != nil {
+		return 0, nil, err
 	}
+
+	data := make([]byte, len)
+	err = binary.Read(reader, binary.LittleEndian, &data)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	return len, data, nil
 }

@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. */
 
-package socks
+package proxy
 
 import (
 	"bufio"
@@ -115,11 +115,6 @@ func (s *socks4Client) AnswerBind(code byte, ip net.IP, port uint16) []byte {
 }
 
 func (s *socks4Client) Validate() error {
-	if !s.config.Server.AllowAnonymous {
-		s.conn.Write(s.Answer(0x5B))
-		return fmt.Errorf("socks4 don't support authentication and anonymous access disabled in config")
-	}
-
 	if s.command == 0x01 {
 	} else if s.command == 0x02 {
 		if !s.config.Server.AllowTCPBind {
@@ -147,6 +142,10 @@ func (s *socks4Client) Handshake(reader *bufio.Reader) error {
 
 func (s *socks4Client) Auth(reader *bufio.Reader, authMethods []models.AuthMethod) (*models.User, error) {
 	// Socks4 don't support authentication (ident not what we want, huh)
+	if !s.config.Server.AllowAnonymous {
+		s.conn.Write(s.Answer(0x5B))
+		return nil, fmt.Errorf("socks4 don't support authentication and anonymous access disabled in config")
+	}
 
 	return nil, nil
 }
