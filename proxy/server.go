@@ -93,7 +93,7 @@ func (s *Server) Start() error {
 	}
 
 	if s.tls {
-		log.Infof("Starting new tls socks server. Configuration:\n"+
+		log.Infof("Starting new tls proxy server. Configuration:\n"+
 			"Bind:\t\t\t\t%s\n"+
 			"Auth methods:\t\t\t%s\n"+
 			"HTTP CONNECT allowed:\t\t%t\n"+
@@ -101,7 +101,7 @@ func (s *Server) Start() error {
 			"UDP association allowed:\t%t\n",
 			s.config.Server.Bind, authMethods, s.config.Server.AllowHTTPConnect, s.config.Server.AllowTCPBind, s.config.Server.AllowUDPAssociation)
 	} else {
-		log.Infof("Starting new socks server. Configuration:\n"+
+		log.Infof("Starting new proxy server. Configuration:\n"+
 			"Bind:\t\t\t\t%s\n"+
 			"Auth methods:\t\t\t%s\n"+
 			"HTTP CONNECT allowed:\t\t%t\n"+
@@ -114,7 +114,7 @@ func (s *Server) Start() error {
 		conn, err := s.listener.Accept()
 		if err != nil {
 			if s.work {
-				log.Errorln("(socks server)", err)
+				log.Errorln("(proxy server)", err)
 			}
 			continue
 		}

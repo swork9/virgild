@@ -140,17 +140,17 @@ func main() {
 			server, err = proxy.NewServer(config, authMethods)
 		}
 		if err != nil {
-			log.Fatalln("(socks server)", err)
+			log.Fatalln("(proxy server)", err)
 		}
 		err = server.Init()
 		if err != nil {
-			log.Fatalln("(socks server)", err)
+			log.Fatalln("(proxy server)", err)
 		}
 		proxyServers = append(proxyServers, server)
 	}
 
 	if len(proxyServers) == 0 {
-		log.Fatalln("(socks server) nothing to start, please configure [server] config section")
+		log.Fatalln("(proxy server) nothing to start, please configure [server] config section")
 	}
 
 	errc := make(chan error)
@@ -176,7 +176,7 @@ func main() {
 		select {
 		case err := <-errc:
 			if err != nil {
-				log.Fatalln("(socks server)", err)
+				log.Fatalln("(proxy server)", err)
 			}
 		}
 	}
