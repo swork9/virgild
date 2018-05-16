@@ -32,6 +32,7 @@ type Config struct {
 	Server        ServerConfig
 	AuthSQL       AuthSQLConfig
 	AuthPlainText AuthPlainTextConfig
+	Subnets       SubnetsConfig
 }
 
 type ServerConfig struct {
@@ -86,6 +87,13 @@ type AuthSQLConfig struct {
 type AuthPlainTextConfig struct {
 	Path       string
 	HashMethod string
+}
+
+type SubnetsConfig struct {
+	UserWillIgnore bool
+
+	Allow []string
+	Deny  []string
 }
 
 func (c *Config) GetAuthMethods() ([]AuthMethod, error) {

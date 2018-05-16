@@ -9,6 +9,7 @@ Easy to use socks(4/4a/5) server.
    - User authentication via plain text db.
    - User authentication via sql (odbc too).
    - TLS server.
+   - Ability to filter users by subnets.
 
 ### TODO
    - Web panel for monitoring.

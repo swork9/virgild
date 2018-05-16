@@ -129,15 +129,25 @@ func main() {
 		log.Fatalln("(auth) current configuration will not work, because anonymous login disabled and no other auth methods configured.")
 	}
 
+	allowedSubnets := &models.SubnetChecker{}
+	if err = allowedSubnets.Load(config.Subnets.Allow); err != nil {
+		log.Fatalln("(allowed subnets)", err)
+	}
+
+	blockedSubnets := &models.SubnetChecker{}
+	if err = blockedSubnets.Load(config.Subnets.Deny); err != nil {
+		log.Fatalln("(blocked subnets)", err)
+	}
+
 	proxyServers := []*proxy.Server{}
 	if len(config.Server.Bind) > 0 {
 		var err error
 		var server *proxy.Server
 		if len(config.Server.PrivateKey) > 0 && len(config.Server.PublicKey) > 0 {
 			/// If you want to generate self signed cert for server, use something like this: openssl req -x509 -newkey rsa:4096 -keyout private.key -out public.key -nodes -days 365
-			server, err = proxy.NewTLSServer(config, authMethods)
+			server, err = proxy.NewServer(config, true, authMethods, allowedSubnets, blockedSubnets)
 		} else {
-			server, err = proxy.NewServer(config, authMethods)
+			server, err = proxy.NewServer(config, false, authMethods, allowedSubnets, blockedSubnets)
 		}
 		if err != nil {
 			log.Fatalln("(proxy server)", err)

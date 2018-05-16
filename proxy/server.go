@@ -45,6 +45,9 @@ type Server struct {
 
 	config      *models.Config
 	authMethods []models.AuthMethod
+
+	allowedSubnets *models.SubnetChecker
+	blockedSubnets *models.SubnetChecker
 }
 
 func (s *Server) Init() error {
@@ -92,23 +95,16 @@ func (s *Server) Start() error {
 		authMethods += authMethod.GetName() + " "
 	}
 
-	if s.tls {
-		log.Infof("Starting new tls proxy server. Configuration:\n"+
-			"Bind:\t\t\t\t%s\n"+
-			"Auth methods:\t\t\t%s\n"+
-			"HTTP CONNECT allowed:\t\t%t\n"+
-			"TCP bind allowed:\t\t%t\n"+
-			"UDP association allowed:\t%t\n",
-			s.config.Server.Bind, authMethods, s.config.Server.AllowHTTPConnect, s.config.Server.AllowTCPBind, s.config.Server.AllowUDPAssociation)
-	} else {
-		log.Infof("Starting new proxy server. Configuration:\n"+
-			"Bind:\t\t\t\t%s\n"+
-			"Auth methods:\t\t\t%s\n"+
-			"HTTP CONNECT allowed:\t\t%t\n"+
-			"TCP bind allowed:\t\t%t\n"+
-			"UDP association allowed:\t%t\n",
-			s.config.Server.Bind, authMethods, s.config.Server.AllowHTTPConnect, s.config.Server.AllowTCPBind, s.config.Server.AllowUDPAssociation)
-	}
+	log.Infof("Starting new proxy server. Configuration:\n"+
+		"Bind:\t\t\t\t%s\n"+
+		"TLS:\t\t\t\t%t\n"+
+		"Auth methods:\t\t\t%s\n"+
+		"HTTP CONNECT allowed:\t\t%t\n"+
+		"TCP bind allowed:\t\t%t\n"+
+		"UDP association allowed:\t%t\n"+
+		"Filter by allowed subnets:\t%t\n"+
+		"Filter by blocked subnets:\t%t\n",
+		s.config.Server.Bind, s.tls, authMethods, s.config.Server.AllowHTTPConnect, s.config.Server.AllowTCPBind, s.config.Server.AllowUDPAssociation, !s.allowedSubnets.Empty(), !s.blockedSubnets.Empty())
 
 	for s.work {
 		conn, err := s.listener.Accept()
@@ -169,9 +165,9 @@ func (s *Server) FreeUDPPort(port int) {
 	s.udpPorts[port] = false
 }
 
-func NewServer(config *models.Config, authMethods []models.AuthMethod) (*Server, error) {
+func NewServer(config *models.Config, tls bool, authMethods []models.AuthMethod, allowedSubnets *models.SubnetChecker, blockedSubnets *models.SubnetChecker) (*Server, error) {
 	server := &Server{
-		tls:  false,
+		tls:  tls,
 		work: true,
 
 		tcpPorts:      map[int]bool{},
@@ -181,23 +177,9 @@ func NewServer(config *models.Config, authMethods []models.AuthMethod) (*Server,
 
 		config:      config,
 		authMethods: authMethods,
-	}
 
-	return server, nil
-}
-
-func NewTLSServer(config *models.Config, authMethods []models.AuthMethod) (*Server, error) {
-	server := &Server{
-		tls:  true,
-		work: true,
-
-		tcpPorts:      map[int]bool{},
-		tcpPortsMutex: &sync.Mutex{},
-		udpPorts:      map[int]bool{},
-		udpPortsMutex: &sync.Mutex{},
-
-		config:      config,
-		authMethods: authMethods,
+		allowedSubnets: allowedSubnets,
+		blockedSubnets: blockedSubnets,
 	}
 
 	return server, nil

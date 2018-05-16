@@ -23,49 +23,32 @@ SOFTWARE. */
 package proxy
 
 import (
-	"bufio"
+	"fmt"
 	"net"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/swork9/virgild/models"
 )
 
-func handle(s *Server, conn net.Conn) {
-	defer conn.Close()
-	defer log.Debugln("Connection from", conn.RemoteAddr().String(), "closed")
-	log.Debugln("New connection from", conn.RemoteAddr().String())
-
-	reader := bufio.NewReader(conn)
-	proxy, err := getProxyClientVersion(s, conn, reader)
-	if err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "version error:", err)
-		return
+func checkSubnetsRules(s *Server, conn net.Conn, user *models.User) error {
+	if s.allowedSubnets.Empty() && s.blockedSubnets.Empty() {
+		return nil
+	}
+	if s.config.Subnets.UserWillIgnore && user != nil {
+		return nil
 	}
 
-	if err = proxy.Handshake(reader); err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "handshake error:", err)
-		return
+	ip := conn.RemoteAddr().(*net.TCPAddr).IP
+	if !s.allowedSubnets.Empty() {
+		if _, contains := s.allowedSubnets.Contains(ip); !contains {
+			return fmt.Errorf("blocked, not from allowed subnets")
+		}
 	}
 
-	var user *models.User
-	if user, err = proxy.Auth(reader, s.authMethods); err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "auth error:", err)
-		return
+	if !s.blockedSubnets.Empty() {
+		if subnet, contains := s.blockedSubnets.Contains(ip); contains {
+			return fmt.Errorf("blocked, from allowed subnet %s", subnet.String())
+		}
 	}
 
-	// Check for subnets rules
-	if err = checkSubnetsRules(s, conn, user); err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "security error:", err)
-		return
-	}
-
-	if err = proxy.Request(reader); err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "request error:", err)
-		return
-	}
-
-	if err = proxy.Work(); err != nil {
-		log.Errorln("client:", conn.RemoteAddr().String(), "error:", err)
-		return
-	}
+	return nil
 }
