@@ -46,7 +46,7 @@ func checkSubnetsRules(s *Server, conn net.Conn, user *models.User) error {
 
 	if !s.blockedSubnets.Empty() {
 		if subnet, contains := s.blockedSubnets.Contains(ip); contains {
-			return fmt.Errorf("blocked, from allowed subnet %s", subnet.String())
+			return fmt.Errorf("blocked, from restricted subnet %s", subnet.String())
 		}
 	}
 

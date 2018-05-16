@@ -27,6 +27,7 @@ import (
 	"net"
 
 	log "github.com/sirupsen/logrus"
+
 	"github.com/swork9/virgild/models"
 )
 
