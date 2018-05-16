@@ -59,8 +59,8 @@ func checkRemoteSubnetsRules(s *Server, user *models.User, ip net.IP) error {
 	}
 
 	if !s.allowedRemoteSubnets.Empty() {
-		if subnet, contains := s.allowedRemoteSubnets.Contains(ip); !contains {
-			return fmt.Errorf("blocked remote addr, from restricted subnet %s", subnet.String())
+		if _, contains := s.allowedRemoteSubnets.Contains(ip); !contains {
+			return fmt.Errorf("blocked remote addr %s, not from allowed remote subnets", ip.String())
 		}
 	}
 
