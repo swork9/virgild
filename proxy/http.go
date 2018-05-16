@@ -187,7 +187,7 @@ func (h *httpClient) Work() error {
 
 	var err error
 	var remote net.Conn
-	if remote, err = connectHostname(h.hostname, uint16(h.port)); err != nil {
+	if remote, err = connectHostname(h.server, h.user, h.hostname, uint16(h.port)); err != nil {
 		h.conn.Write(h.Answer("503 Service Unavailable"))
 		return err
 	}

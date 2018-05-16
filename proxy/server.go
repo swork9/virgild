@@ -46,8 +46,9 @@ type Server struct {
 	config      *models.Config
 	authMethods []models.AuthMethod
 
-	allowedSubnets *models.SubnetChecker
-	blockedSubnets *models.SubnetChecker
+	allowedSubnets       *models.SubnetChecker
+	blockedSubnets       *models.SubnetChecker
+	allowedRemoteSubnets *models.SubnetChecker
 }
 
 func (s *Server) Init() error {
@@ -165,7 +166,13 @@ func (s *Server) FreeUDPPort(port int) {
 	s.udpPorts[port] = false
 }
 
-func NewServer(config *models.Config, tls bool, authMethods []models.AuthMethod, allowedSubnets *models.SubnetChecker, blockedSubnets *models.SubnetChecker) (*Server, error) {
+func NewServer(config *models.Config,
+	tls bool,
+	authMethods []models.AuthMethod,
+	allowedSubnets *models.SubnetChecker,
+	blockedSubnets *models.SubnetChecker,
+	allowedRemoteSubnets *models.SubnetChecker) (*Server, error) {
+
 	server := &Server{
 		tls:  tls,
 		work: true,
@@ -178,8 +185,9 @@ func NewServer(config *models.Config, tls bool, authMethods []models.AuthMethod,
 		config:      config,
 		authMethods: authMethods,
 
-		allowedSubnets: allowedSubnets,
-		blockedSubnets: blockedSubnets,
+		allowedSubnets:       allowedSubnets,
+		blockedSubnets:       blockedSubnets,
+		allowedRemoteSubnets: allowedRemoteSubnets,
 	}
 
 	return server, nil

@@ -139,15 +139,20 @@ func main() {
 		log.Fatalln("(blocked subnets)", err)
 	}
 
+	allowedRemoteSubnets := &models.SubnetChecker{}
+	if err = allowedRemoteSubnets.Load(config.Subnets.AllowRemote); err != nil {
+		log.Fatalln("(allowed remote subnets)", err)
+	}
+
 	proxyServers := []*proxy.Server{}
 	if len(config.Server.Bind) > 0 {
 		var err error
 		var server *proxy.Server
 		if len(config.Server.PrivateKey) > 0 && len(config.Server.PublicKey) > 0 {
 			/// If you want to generate self signed cert for server, use something like this: openssl req -x509 -newkey rsa:4096 -keyout private.key -out public.key -nodes -days 365
-			server, err = proxy.NewServer(config, true, authMethods, allowedSubnets, blockedSubnets)
+			server, err = proxy.NewServer(config, true, authMethods, allowedSubnets, blockedSubnets, allowedRemoteSubnets)
 		} else {
-			server, err = proxy.NewServer(config, false, authMethods, allowedSubnets, blockedSubnets)
+			server, err = proxy.NewServer(config, false, authMethods, allowedSubnets, blockedSubnets, allowedRemoteSubnets)
 		}
 		if err != nil {
 			log.Fatalln("(proxy server)", err)

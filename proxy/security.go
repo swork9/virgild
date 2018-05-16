@@ -29,7 +29,7 @@ import (
 	"github.com/swork9/virgild/models"
 )
 
-func checkSubnetsRules(s *Server, conn net.Conn, user *models.User) error {
+func checkSubnetsRules(s *Server, user *models.User, conn net.Conn) error {
 	if s.allowedSubnets.Empty() && s.blockedSubnets.Empty() {
 		return nil
 	}
@@ -47,6 +47,20 @@ func checkSubnetsRules(s *Server, conn net.Conn, user *models.User) error {
 	if !s.blockedSubnets.Empty() {
 		if subnet, contains := s.blockedSubnets.Contains(ip); contains {
 			return fmt.Errorf("blocked, from restricted subnet %s", subnet.String())
+		}
+	}
+
+	return nil
+}
+
+func checkRemoteSubnetsRules(s *Server, user *models.User, ip net.IP) error {
+	if s.config.Subnets.UserWillIgnore && user != nil {
+		return nil
+	}
+
+	if !s.allowedRemoteSubnets.Empty() {
+		if subnet, contains := s.allowedRemoteSubnets.Contains(ip); !contains {
+			return fmt.Errorf("blocked remote addr, from restricted subnet %s", subnet.String())
 		}
 	}
 

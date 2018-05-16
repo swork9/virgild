@@ -92,8 +92,9 @@ type AuthPlainTextConfig struct {
 type SubnetsConfig struct {
 	UserWillIgnore bool
 
-	Allow []string
-	Deny  []string
+	Allow       []string
+	Deny        []string
+	AllowRemote []string
 }
 
 func (c *Config) GetAuthMethods() ([]AuthMethod, error) {

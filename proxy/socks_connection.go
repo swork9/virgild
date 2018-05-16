@@ -30,7 +30,12 @@ import (
 	"github.com/swork9/virgild/models"
 )
 
-func connectIP(ip net.IP, port uint16) (net.Conn, error) {
+func connectIP(s *Server, user *models.User, ip net.IP, port uint16) (net.Conn, error) {
+	err := checkRemoteSubnetsRules(s, user, ip)
+	if err != nil {
+		return nil, err
+	}
+
 	c, err := net.DialTCP("tcp", nil, &net.TCPAddr{IP: ip, Port: int(port)})
 	if err != nil {
 		return nil, err
@@ -39,14 +44,19 @@ func connectIP(ip net.IP, port uint16) (net.Conn, error) {
 	return c, nil
 }
 
-func connectHostname(host string, port uint16) (net.Conn, error) {
+func connectHostname(s *Server, user *models.User, host string, port uint16) (net.Conn, error) {
 	ips, err := net.LookupIP(host)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, ip := range ips {
-		c, err := connectIP(ip, port)
+		err = checkRemoteSubnetsRules(s, user, ip)
+		if err != nil {
+			return nil, err
+		}
+
+		c, err := net.DialTCP("tcp", nil, &net.TCPAddr{IP: ip, Port: int(port)})
 		if err == nil {
 			return c, nil
 		}

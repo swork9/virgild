@@ -55,7 +55,7 @@ func handle(s *Server, conn net.Conn) {
 	}
 
 	// Check for subnets rules
-	if err = checkSubnetsRules(s, conn, user); err != nil {
+	if err = checkSubnetsRules(s, user, conn); err != nil {
 		log.Errorln("client:", conn.RemoteAddr().String(), "security error:", err)
 		return
 	}

@@ -171,12 +171,12 @@ func (s *socks4Client) Work() error {
 
 		var remote net.Conn
 		if s.useHostname {
-			if remote, err = connectHostname(s.hostname, s.port); err != nil {
+			if remote, err = connectHostname(s.server, nil, s.hostname, s.port); err != nil {
 				s.conn.Write(s.Answer(0x5B))
 				return err
 			}
 		} else {
-			if remote, err = connectIP(s.ip, s.port); err != nil {
+			if remote, err = connectIP(s.server, nil, s.ip, s.port); err != nil {
 				s.conn.Write(s.Answer(0x5B))
 				return err
 			}

@@ -358,12 +358,12 @@ func (s *socks5Client) Work() error {
 
 		var remote net.Conn
 		if s.request.useHostname {
-			if remote, err = connectHostname(s.request.hostname, s.request.port); err != nil {
+			if remote, err = connectHostname(s.server, s.user, s.request.hostname, s.request.port); err != nil {
 				s.conn.Write(s.request.Answer(0x04))
 				return err
 			}
 		} else {
-			if remote, err = connectIP(s.request.ip, s.request.port); err != nil {
+			if remote, err = connectIP(s.server, s.user, s.request.ip, s.request.port); err != nil {
 				s.conn.Write(s.request.Answer(0x04))
 				return err
 			}
