@@ -93,8 +93,7 @@ func (h *httpClient) Handshake(reader *bufio.Reader) error {
 				return fmt.Errorf("http client send wrong CONNECT header")
 			}
 
-			// Yes, it's really ugly
-			if connect[0] != "ONNECT" {
+			if connect[0] != "CONNECT" {
 				return fmt.Errorf("http client send wrong http command")
 			}
 
