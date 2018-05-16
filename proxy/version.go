@@ -41,7 +41,7 @@ func getProxyClientVersion(s *Server, conn net.Conn, reader *bufio.Reader) (mode
 	} else if socksVersion == 0x05 {
 		return &socks5Client{server: s, config: s.config, conn: conn}, nil
 		// Looks like it's http CONNECT, so try it.
-	} else if socksVersion == 'C' {
+	} else if s.config.Server.AllowHTTP {
 		reader.UnreadByte()
 		return &httpClient{server: s, config: s.config, conn: conn}, nil
 	} else {

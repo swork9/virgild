@@ -46,8 +46,8 @@ type ServerConfig struct {
 	PrivateKey string
 	PublicKey  string
 
-	AllowAnonymous   bool
-	AllowHTTPConnect bool
+	AllowAnonymous bool
+	AllowHTTP      bool
 
 	AllowTCPBind      bool
 	TCPBindAddr       string

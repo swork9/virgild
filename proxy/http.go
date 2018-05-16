@@ -40,101 +40,114 @@ type httpClient struct {
 	conn   net.Conn
 	user   *models.User
 
+	command  string
 	hostname string
 	port     int
-	headers  map[string]string
+
+	headers   []byte
+	proxyAuth string
 }
 
 func (h *httpClient) Answer(status string) []byte {
 	return []byte("HTTP/1.1 " + status + "\r\nProxy-Agent: virgild\r\n\r\n")
 }
 
-func (h *httpClient) Handshake(reader *bufio.Reader) error {
-	if !h.config.Server.AllowHTTPConnect {
-		return fmt.Errorf("HTTP CONNECT disabled in config")
-	}
-	h.headers = map[string]string{}
-
-	firstLine := false
-	var line []byte
-	var n byte
+func (h *httpClient) ReadCommand(reader *bufio.Reader) error {
+	var buffer []byte
 	var err error
+	if buffer, err = reader.ReadBytes(' '); err != nil {
+		return err
+	}
+	h.command = string(buffer[0 : len(buffer)-1])
+
+	if buffer, err = reader.ReadBytes(' '); err != nil {
+		return err
+	}
+	h.hostname = string(buffer[0 : len(buffer)-1])
+
+	if _, err = reader.ReadBytes('\n'); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (h *httpClient) ReadHeaders(reader *bufio.Reader) error {
+	var buffer []byte
+	var line string
+	var err error
+
 	for {
-		line, err = reader.ReadBytes('\r')
-		if err != nil {
+		if buffer, err = reader.ReadBytes('\n'); err != nil {
 			return err
 		}
-		// Remove '\r' from slice
-		line = line[0 : len(line)-1]
-
-		n, err = reader.ReadByte()
-		if err != nil {
-			return err
-		}
-
-		if n != '\n' {
-			return fmt.Errorf("http client send wrong new line byte")
-		}
-
-		if len(line) == 0 {
+		if len(buffer) <= 2 {
 			break
 		}
 
-		if firstLine {
-			header := strings.SplitN(string(line), ": ", 2)
-			if len(header) != 2 {
-				continue
-			}
-
-			h.headers[strings.ToLower(header[0])] = header[1]
+		line = string(buffer[0 : len(buffer)-2])
+		if strings.HasPrefix(strings.ToLower(line), "proxy-authorization: ") {
+			h.proxyAuth = line[21:]
 		} else {
-			connect := strings.SplitN(string(line), " ", 3)
-			if len(connect) != 3 {
-				return fmt.Errorf("http client send wrong CONNECT header")
-			}
-
-			if connect[0] != "CONNECT" {
-				return fmt.Errorf("http client send wrong http command")
-			}
-
-			host := strings.SplitN(connect[1], ":", 2)
-			if len(host) != 2 {
-				return fmt.Errorf("http client send wrong host and port")
-			}
-
-			h.hostname = host[0]
-			h.port, err = strconv.Atoi(host[1])
-			if err != nil {
-				return err
-			}
-
-			firstLine = true
+			h.headers = append(h.headers, buffer...)
 		}
 	}
 
-	if len(h.hostname) == 0 || h.port == 0 {
-		return fmt.Errorf("http client send empty host and port")
+	h.headers = append(h.headers, '\r')
+	h.headers = append(h.headers, '\n')
+
+	return nil
+}
+
+func (h *httpClient) Handshake(reader *bufio.Reader) error {
+	var err error
+	if err = h.ReadCommand(reader); err != nil {
+		return err
+	}
+	if err = h.ReadHeaders(reader); err != nil {
+		return err
+	}
+
+	if h.command == "CONNECT" {
+		tmp := strings.SplitN(h.hostname, ":", 2)
+		if len(tmp) != 2 {
+			return fmt.Errorf("http client send wrong host and/or port")
+		}
+
+		h.hostname = tmp[0]
+		if h.port, err = strconv.Atoi(tmp[1]); err != nil {
+			return err
+		}
+	} else {
+		tmp := strings.SplitN(h.hostname, "/", 4)
+		if len(tmp) < 4 {
+			return fmt.Errorf("http client send wrong hostname")
+		}
+
+		h.hostname = tmp[2]
+		h.port = 80
+
+		h.headers = append([]byte(fmt.Sprintf("%s /%s HTTP/1.1\r\n", h.command, tmp[3])), h.headers...)
 	}
 
 	return nil
 }
 
 func (h *httpClient) GetUserPassword() (string, string, error) {
-	encoded, ok := h.headers["proxy-authorization"]
-	if !ok {
+	if len(h.proxyAuth) == 0 {
 		return "", "", fmt.Errorf("http client don't provide authentication credentials")
 	}
 
-	if strings.HasSuffix(strings.ToLower(encoded), "basic ") {
+	if strings.HasSuffix(strings.ToLower(h.proxyAuth), "basic ") {
 		return "", "", fmt.Errorf("http client authentication not looks like \"Basic\"")
 	}
 
-	baseEncoded, err := base64.StdEncoding.DecodeString(encoded[6:])
+	baseDecoded, err := base64.StdEncoding.DecodeString(h.proxyAuth[6:])
 	if err != nil {
 		return "", "", err
 	}
 
-	credentials := strings.SplitN(string(baseEncoded), ":", 2)
+	credentials := strings.SplitN(string(baseDecoded), ":", 2)
 	if len(credentials) != 2 {
 		return "", "", fmt.Errorf("http client authentication credentials can't be extracted")
 	}
@@ -192,7 +205,11 @@ func (h *httpClient) Work() error {
 		return err
 	}
 
-	h.conn.Write(h.Answer("200 Connection Established"))
+	if h.command == "CONNECT" {
+		h.conn.Write(h.Answer("200 Connection Established"))
+	} else {
+		remote.Write(h.headers)
+	}
 
 	go proxyChannel(h.config, h.conn, remote)
 	proxyChannel(h.config, remote, h.conn)

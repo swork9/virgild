@@ -5,7 +5,7 @@ Easy to use socks(4/4a/5) server.
    - Full support for socks connection command.
    - Experimental support for tcp bind.
    - Experimental support for udp association.
-   - Experimental support for HTTP CONNECT.
+   - Experimental support for HTTP proxy.
    - User authentication via plain text db.
    - User authentication via sql (odbc too).
    - TLS server.
