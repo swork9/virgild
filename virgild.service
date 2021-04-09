@@ -1,0 +1,17 @@
+[Unit]
+Description=Virgild proxy service
+After=network.target auditd.service
+
+[Service]
+#User=www
+#Group=www
+ExecStart=/opt/virgild/virgild -c /opt/virgild/virgild.conf
+KillMode=control-group
+Type=simple
+Restart=always
+RestartSec=5
+StartLimitInterval=0
+
+[Install]
+WantedBy=multi-user.target
+Alias=virgild.service

@@ -22,13 +22,13 @@ To compile virgild from sources, you'll need golang (https://golang.org/).
 ```
 git clone https://github.com/swork9/virgild
 cd virgild
-go get -d ./...
+go get -v
 go build -v -tags db_mysql db_odbc db_sqlite db_postgresql
 ```
 
 ##### Updating
 ```
-go get -u github.com/swork9/virgild
+git pull
 ```
 
 ### Usage
@@ -46,6 +46,13 @@ In most cases, you will want to run virgild as a daemon, like:
 ./virgild -d -c /etc/virgild.conf
 ```
 
+You can also run it as a service, example in virgild.service
+
+```
+cp virgild.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl --now enable virgild
+```
 ### Authentication methods
 
 ##### Plain text
