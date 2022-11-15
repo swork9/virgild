@@ -31,8 +31,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/gcfg.v1"
 
-	"github.com/swork9/virgild/models"
-	"github.com/swork9/virgild/proxy"
+	"virgild/models"
+	"virgild/proxy"
 )
 
 var (
@@ -41,7 +41,6 @@ var (
 
 func init() {
 	configPtr := flag.String("c", "virgild.conf", "Config file to use")
-	detachPtr := flag.Bool("d", false, "Daemonize service and detach from tty")
 	flag.Parse()
 
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
@@ -71,10 +70,6 @@ func init() {
 		log.SetLevel(log.FatalLevel)
 	} else {
 		log.SetLevel(log.ErrorLevel)
-	}
-
-	if err := daemonize(os.Args, config.Server.UID, config.Server.GID, *detachPtr); err != nil {
-		log.Fatalln("(daemonize)", err)
 	}
 }
 

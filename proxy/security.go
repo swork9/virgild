@@ -26,7 +26,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/swork9/virgild/models"
+	"virgild/models"
 )
 
 func checkSubnetsRules(s *Server, user *models.User, conn net.Conn) error {

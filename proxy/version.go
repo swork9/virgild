@@ -27,7 +27,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/swork9/virgild/models"
+	"virgild/models"
 )
 
 func getProxyClientVersion(s *Server, conn net.Conn, reader *bufio.Reader) (models.ProxyClient, error) {

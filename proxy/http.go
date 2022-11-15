@@ -30,8 +30,9 @@ import (
 	"strconv"
 	"strings"
 
+	"virgild/models"
+
 	log "github.com/sirupsen/logrus"
-	"github.com/swork9/virgild/models"
 )
 
 type httpClient struct {

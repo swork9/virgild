@@ -28,7 +28,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/swork9/virgild/models"
+	"virgild/models"
 )
 
 func handle(s *Server, conn net.Conn) {

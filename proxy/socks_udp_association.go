@@ -31,7 +31,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/swork9/virgild/models"
+	"virgild/models"
 )
 
 func udpSendSocksPacket(listener net.PacketConn, from *net.UDPAddr, data []byte) error {

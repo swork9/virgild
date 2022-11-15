@@ -27,7 +27,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/swork9/virgild/models"
+	"virgild/models"
 )
 
 func connectIP(s *Server, user *models.User, ip net.IP, port uint16) (net.Conn, error) {

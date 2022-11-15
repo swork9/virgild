@@ -25,7 +25,7 @@ package models
 import (
 	"net"
 
-	"github.com/swork9/virgild/auth"
+	"virgild/auth"
 )
 
 type Config struct {
