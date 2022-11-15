@@ -37,13 +37,6 @@ git pull
 Usage of ./virgild:
   -c string
         Config file to use (default "virgild.conf")
-  -d    Daemonize service and detach from tty
-```
-
-In most cases, you will want to run virgild as a daemon, like:
-
-```
-./virgild -d -c /etc/virgild.conf
 ```
 
 You can also run it as a service, example in virgild.service
