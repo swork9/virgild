@@ -36,9 +36,6 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	UID string
-	GID string
-
 	Bind    string
 	Timeout int
 	Buffer  int
